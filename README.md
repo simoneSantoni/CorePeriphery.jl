@@ -56,6 +56,30 @@ result = random_walker_profiling(A; n_walks=1000, walk_length=10)
 ```
 Nodes visited more frequently by random walks are classified as more core-like.
 
+### 7. MINRES/SVD Method
+```julia
+result = minres_svd(A)
+```
+Minimizes residual to find in-coreness and out-coreness vectors. Works with asymmetric (directed) networks.
+
+### 8. Multiple Core-Periphery Pairs
+```julia
+result = multiple_cp_pairs(A; max_pairs=10, min_pair_size=2)
+```
+Detects multiple non-overlapping core-periphery pairs using Q^cp quality function. Returns `CPMultiResult` with pair assignments.
+
+### 9. Surprise-Based Detection
+```julia
+result = surprise_cp(A)
+```
+Uses multinomial hypergeometric distribution to compute statistical surprise of CP structure.
+
+### 10. Label-Switching Algorithm
+```julia
+result = label_switching_cp(A)
+```
+Fast greedy algorithm with efficient O(n) updates per iteration for discrete CP detection.
+
 ## Usage
 
 ### Basic Example
@@ -100,12 +124,19 @@ results = [
     borgatti_everett_discrete(A),
     lip_discrete(A),
     spectral_method(A),
-    random_walker_profiling(A)
+    random_walker_profiling(A),
+    minres_svd(A),
+    surprise_cp(A),
+    label_switching_cp(A)
 ]
 
 for r in results
     println("$(r.algorithm): quality = $(round(r.quality, digits=3))")
 end
+
+# For multiple CP pairs detection
+result_multi = multiple_cp_pairs(A)
+println("$(result_multi.algorithm): $(result_multi.n_pairs) pairs detected")
 ```
 
 ### Weighted Networks
@@ -162,9 +193,13 @@ include("examples/basic_usage.jl")
 
 5. Della Rossa, F., Dercole, F., Piccardi, C. (2013). Profiling core-periphery network structure by random walkers. *Scientific Reports*, 3, 1467.
 
-6. Kojaku, S., Masuda, N. (2017). Finding multiple core-periphery pairs in networks. *Physical Review E*, 96(5), 052313.
+6. Boyd, J.P., Fitzgerald, W.J., Mahutga, M.C., Smith, D.A. (2010). Computing continuous core/periphery structures for social relations data with MINRES/SVD. *Social Networks*, 32(2), 125-137.
 
-7. Jeude, J., et al. (2019). Detecting Core-Periphery Structures by Surprise. *EPL*, 125(6), 68001.
+7. Kojaku, S., Masuda, N. (2017). Finding multiple core-periphery pairs in networks. *Physical Review E*, 96(5), 052313.
+
+8. Jeude, J., et al. (2019). Detecting Core-Periphery Structures by Surprise. *EPL*, 125(6), 68001.
+
+9. Yanchenko, K., Sengupta, S. (2025). A fast label-switching algorithm for core-periphery detection in networks. *arXiv preprint*.
 
 ## License
 

@@ -129,6 +129,40 @@ println("   Core nodes: $(length(result_rombach.core_nodes))")
 println("   Accuracy: $(round(acc * 100, digits=1))%")
 println()
 
+# Algorithm 7: MINRES/SVD
+result_minres = minres_svd(A)
+acc = compute_accuracy(result_minres, true_labels)
+println("7. $(result_minres.algorithm)")
+println("   Quality: $(round(result_minres.quality, digits=3))")
+println("   Core nodes: $(length(result_minres.core_nodes))")
+println("   Accuracy: $(round(acc * 100, digits=1))%")
+println()
+
+# Algorithm 8: Surprise CP
+result_surprise = surprise_cp(A)
+acc = compute_accuracy(result_surprise, true_labels)
+println("8. $(result_surprise.algorithm)")
+println("   Quality: $(round(result_surprise.quality, digits=3))")
+println("   Core nodes: $(length(result_surprise.core_nodes))")
+println("   Accuracy: $(round(acc * 100, digits=1))%")
+println()
+
+# Algorithm 9: Label Switching CP
+result_ls = label_switching_cp(A)
+acc = compute_accuracy(result_ls, true_labels)
+println("9. $(result_ls.algorithm)")
+println("   Quality: $(round(result_ls.quality, digits=3))")
+println("   Core nodes: $(length(result_ls.core_nodes))")
+println("   Accuracy: $(round(acc * 100, digits=1))%")
+println()
+
+# Algorithm 10: Multiple CP Pairs
+result_multi = multiple_cp_pairs(A)
+println("10. $(result_multi.algorithm)")
+println("   Quality: $(round(result_multi.quality, digits=3))")
+println("   Number of pairs: $(result_multi.n_pairs)")
+println()
+
 # Example 2: Using edge list input
 println("\nExample 2: Creating Network from Edge List")
 println("-" ^ 40)

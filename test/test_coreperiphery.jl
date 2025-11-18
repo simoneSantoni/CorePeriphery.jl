@@ -167,6 +167,98 @@ Random.seed!(123)
         @test all(x -> 0.0 <= x <= 1.0, result.coreness)
     end
 
+    @testset "MINRES/SVD" begin
+        # Test with symmetric network
+        edges = [
+            (1, 2), (1, 3), (1, 4),
+            (2, 3), (2, 4),
+            (5, 1)
+        ]
+        A = adjacency_to_matrix(edges, 5)
+
+        result = minres_svd(A)
+
+        @test length(result.coreness) == 5
+        @test result.algorithm == "MINRES/SVD"
+        @test all(x -> 0.0 <= x <= 1.0, result.coreness)
+
+        # Test with asymmetric network (directed)
+        A_asym = zeros(Float64, 4, 4)
+        A_asym[1, 2] = 1.0
+        A_asym[1, 3] = 1.0
+        A_asym[2, 3] = 1.0
+        A_asym[4, 1] = 1.0
+
+        result_asym = minres_svd(A_asym)
+        @test length(result_asym.coreness) == 4
+    end
+
+    @testset "Multiple CP Pairs" begin
+        # Create network with two distinct CP structures
+        A = zeros(Float64, 8, 8)
+        # First CP pair: nodes 1-4
+        for i in 1:2
+            for j in (i+1):4
+                A[i, j] = A[j, i] = 1.0
+            end
+        end
+        A[3, 1] = A[1, 3] = 1.0
+        A[4, 2] = A[2, 4] = 1.0
+
+        # Second CP pair: nodes 5-8
+        for i in 5:6
+            for j in (i+1):8
+                A[i, j] = A[j, i] = 1.0
+            end
+        end
+        A[7, 5] = A[5, 7] = 1.0
+        A[8, 6] = A[6, 8] = 1.0
+
+        result = multiple_cp_pairs(A)
+
+        @test length(result.pair_labels) == 8
+        @test length(result.coreness) == 8
+        @test result.n_pairs >= 1
+        @test result.algorithm == "Multiple CP Pairs"
+    end
+
+    @testset "Surprise CP" begin
+        # Star graph: hub should be core
+        n = 6
+        A = zeros(Float64, n, n)
+        for i in 2:n
+            A[1, i] = A[i, 1] = 1.0
+        end
+
+        result = surprise_cp(A)
+
+        @test length(result.coreness) == n
+        @test result.algorithm == "Surprise CP"
+        @test all(x -> x == 0.0 || x == 1.0, result.coreness)  # Binary
+
+        # Hub should be core
+        @test result.coreness[1] == 1.0
+    end
+
+    @testset "Label Switching CP" begin
+        # Simple CP network
+        edges = [
+            (1, 2), (1, 3), (1, 4), (1, 5),
+            (2, 3), (2, 4), (2, 5),
+            (3, 4),
+            (6, 1), (7, 2)
+        ]
+        A = adjacency_to_matrix(edges, 7)
+
+        result = label_switching_cp(A)
+
+        @test length(result.coreness) == 7
+        @test result.algorithm == "Label Switching CP"
+        @test all(x -> x == 0.0 || x == 1.0, result.coreness)  # Binary
+        @test !isempty(result.core_nodes)
+        @test !isempty(result.periphery_nodes)
+    end
+
     @testset "Core Quality Function" begin
         # Perfect core-periphery structure
         c = [1.0, 1.0, 0.0, 0.0]
