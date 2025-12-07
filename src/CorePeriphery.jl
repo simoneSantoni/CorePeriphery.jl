@@ -158,6 +158,9 @@ Compute quality (correlation) between adjacency matrix and ideal core-periphery 
 """
 function core_quality(A::Matrix{Float64}, c::Vector{Float64}; discrete::Bool=false)
     n = length(c)
+    if n < 2
+        return NaN
+    end
     Δ = ideal_cp_matrix(c; discrete=discrete)
 
     # Extract upper triangle (excluding diagonal)
@@ -195,9 +198,9 @@ Finds coreness vector c that maximizes correlation with ideal pattern Δ[i,j] = 
 Borgatti, S.P., Everett, M.G. (2000). Models of core/periphery structures.
 """
 function borgatti_everett_continuous(A::Matrix{Float64};
-                                     max_iter::Int=1000,
-                                     tol::Float64=1e-6,
-                                     init::Union{Nothing, Vector{Float64}}=nothing)
+    max_iter::Int=1000,
+    tol::Float64=1e-6,
+    init::Union{Nothing,Vector{Float64}}=nothing)
     n = size(A, 1)
 
     # Initialize coreness vector
@@ -216,8 +219,8 @@ function borgatti_everett_continuous(A::Matrix{Float64};
         for i in 1:n
             # Optimize c[i] given all other c values
             # Derivative: sum_j A[i,j] * c[j] - sum_j c[i]*c[j]^2
-            numerator = sum(A[i, j] * c[j] for j in 1:n if j != i)
-            denominator = sum(c[j]^2 for j in 1:n if j != i)
+            numerator = sum(A[i, j] * c[j] for j in 1:n if j != i; init=0.0)
+            denominator = sum(c[j]^2 for j in 1:n if j != i; init=0.0)
 
             if denominator > 0
                 c[i] = numerator / denominator
@@ -268,8 +271,8 @@ Finds binary partition maximizing correlation with ideal discrete pattern.
 Borgatti, S.P., Everett, M.G. (2000). Models of core/periphery structures.
 """
 function borgatti_everett_discrete(A::Matrix{Float64};
-                                   max_iter::Int=1000,
-                                   init::Union{Nothing, Vector{Float64}}=nothing)
+    max_iter::Int=1000,
+    init::Union{Nothing,Vector{Float64}}=nothing)
     n = size(A, 1)
 
     # Initialize with degree-based assignment
@@ -438,11 +441,11 @@ Uses transition function controlled by α and β parameters.
 Rombach, M.P., et al. (2017). Core-Periphery Structure in Networks (Revisited).
 """
 function rombach_continuous(A::Matrix{Float64};
-                            alpha::Float64=0.5,
-                            beta::Float64=0.5,
-                            max_iter::Int=1000,
-                            tol::Float64=1e-6,
-                            n_runs::Int=10)
+    alpha::Float64=0.5,
+    beta::Float64=0.5,
+    max_iter::Int=1000,
+    tol::Float64=1e-6,
+    n_runs::Int=10)
     n = size(A, 1)
 
     # Transition function
@@ -608,8 +611,8 @@ Nodes visited more frequently by random walks are more core-like.
 Rossa, F.D., et al. (2013). Profiling core-periphery network structure by random walkers.
 """
 function random_walker_profiling(A::Matrix{Float64};
-                                 n_walks::Int=1000,
-                                 walk_length::Int=10)
+    n_walks::Int=1000,
+    walk_length::Int=10)
     n = size(A, 1)
 
     # Compute transition matrix
@@ -750,8 +753,8 @@ function minres_svd(A::Matrix{Float64}; max_iter::Int=1000, tol::Float64=1e-6)
         # Update u: minimize over u given v
         # u_i = (Σⱼ Aᵢⱼvⱼ) / (Σⱼ vⱼ² - vᵢ²) for each i
         for i in 1:n
-            numerator = sum(A[i, j] * v[j] for j in 1:n if j != i)
-            denominator = sum(v[j]^2 for j in 1:n if j != i)
+            numerator = sum(A[i, j] * v[j] for j in 1:n if j != i; init=0.0)
+            denominator = sum(v[j]^2 for j in 1:n if j != i; init=0.0)
             if denominator > 0
                 u[i] = numerator / denominator
             end
@@ -760,8 +763,8 @@ function minres_svd(A::Matrix{Float64}; max_iter::Int=1000, tol::Float64=1e-6)
         # Update v: minimize over v given u
         # v_j = (Σᵢ Aᵢⱼuᵢ) / (Σᵢ uᵢ² - uⱼ²) for each j
         for j in 1:n
-            numerator = sum(A[i, j] * u[i] for i in 1:n if i != j)
-            denominator = sum(u[i]^2 for i in 1:n if i != j)
+            numerator = sum(A[i, j] * u[i] for i in 1:n if i != j; init=0.0)
+            denominator = sum(u[i]^2 for i in 1:n if i != j; init=0.0)
             if denominator > 0
                 v[j] = numerator / denominator
             end
@@ -823,9 +826,9 @@ Uses quality function Q^cp and label switching optimization.
 Kojaku, S., Masuda, N. (2017). Finding multiple core-periphery pairs in networks.
 """
 function multiple_cp_pairs(A::Matrix{Float64};
-                           max_pairs::Int=10,
-                           min_pair_size::Int=2,
-                           max_iter::Int=100)
+    max_pairs::Int=10,
+    min_pair_size::Int=2,
+    max_iter::Int=100)
     n = size(A, 1)
     m = sum(A) / 2  # Total edges
     p = 2 * m / (n * (n - 1))  # Edge density (ER null model)
@@ -865,7 +868,7 @@ function multiple_cp_pairs(A::Matrix{Float64};
 
                 # Try merging p1 and p2
                 test_labels = copy(pair_labels)
-                test_labels[pair_labels .== p2] .= p1
+                test_labels[pair_labels.==p2] .= p1
 
                 # Compute change in quality
                 q_new = compute_qcp(test_labels, coreness)
@@ -881,7 +884,7 @@ function multiple_cp_pairs(A::Matrix{Float64};
 
         if best_merge !== nothing && best_delta > 0
             p1, p2 = best_merge
-            pair_labels[pair_labels .== p2] .= p1
+            pair_labels[pair_labels.==p2] .= p1
             delete!(current_pairs, p2)
         else
             break
@@ -962,7 +965,7 @@ function surprise_cp(A::Matrix{Float64}; max_iter::Int=100)
 
     # Initialize based on degree
     degrees = vec(sum(A, dims=2))
-    threshold = median(degrees)
+    threshold = mean(degrees)
     c = Float64.(degrees .>= threshold)
 
     # Count edges in each block
