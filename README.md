@@ -1,5 +1,13 @@
 # CorePeriphery.jl
 
+[![Network Analysis](https://img.shields.io/badge/Network-Analysis-orange.svg)](https://github.com/simoneSantoni/CorePeriphery.jl)
+[![Build Status](https://github.com/simoneSantoni/CorePeriphery.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/simoneSantoni/CorePeriphery.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/simoneSantoni/CorePeriphery.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/simoneSantoni/CorePeriphery.jl)
+[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://simoneSantoni.github.io/CorePeriphery.jl/stable/)
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://simoneSantoni.github.io/CorePeriphery.jl/dev/)
+[![Julia](https://img.shields.io/badge/Julia-1.6+-purple.svg)](https://julialang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Julia package implementing various algorithms for detecting core-periphery structure in networks.
 
 ## Overview
