@@ -1,5 +1,11 @@
 # API Reference
 
+## Module
+
+```@docs
+CorePeriphery
+```
+
 ## Result Types
 
 ```@docs
