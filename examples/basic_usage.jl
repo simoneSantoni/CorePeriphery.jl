@@ -10,6 +10,7 @@ push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
 using CorePeriphery
 using LinearAlgebra
 using Random
+using Statistics
 
 # Set seed for reproducibility
 Random.seed!(42)
@@ -43,6 +44,36 @@ function generate_cp_network(n_core::Int, n_periphery::Int;
             if rand() < p
                 A[i, j] = 1.0
                 A[j, i] = 1.0
+            end
+        end
+    end
+
+    # Persistence profiling requires a connected graph. Join any disconnected
+    # components to the first core node without otherwise changing their edges.
+    seen = falses(n)
+    seen[1] = true
+    queue = [1]
+    while !isempty(queue)
+        i = popfirst!(queue)
+        for j in 1:n
+            if A[i, j] > 0 && !seen[j]
+                seen[j] = true
+                push!(queue, j)
+            end
+        end
+    end
+    while !all(seen)
+        representative = findfirst(!, seen)
+        A[1, representative] = A[representative, 1] = 1.0
+        seen[representative] = true
+        push!(queue, representative)
+        while !isempty(queue)
+            i = popfirst!(queue)
+            for j in 1:n
+                if A[i, j] > 0 && !seen[j]
+                    seen[j] = true
+                    push!(queue, j)
+                end
             end
         end
     end
@@ -198,7 +229,11 @@ weighted_edges = [
 ]
 
 A_weighted = adjacency_to_matrix(weighted_edges, 6)
-result_weighted = spectral_method(A_weighted)
+result_weighted = rombach_continuous(
+    A_weighted;
+    n_runs=3,
+    rng=MersenneTwister(7),
+)
 
 println("Weighted network analysis:")
 for i in 1:6

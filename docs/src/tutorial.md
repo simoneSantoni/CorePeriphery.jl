@@ -73,7 +73,7 @@ println(result.core_nodes)
 # Nodes classified as periphery
 println(result.periphery_nodes)
 
-# Quality score (correlation with ideal pattern)
+# Algorithm-specific quality score
 println(result.quality)
 
 # Algorithm name
@@ -111,7 +111,8 @@ results = [
     label_switching_cp(A)
 ]
 
-# Compare quality scores
+# Display quality scores. Their scales differ by method, so do not rank
+# algorithms by these raw values.
 println("Algorithm Comparison:")
 println("-" ^ 50)
 for r in results
@@ -172,23 +173,47 @@ end
 println("Best parameters: α=$(best_params.alpha), β=$(best_params.beta)")
 ```
 
-### Random Walker Parameters
+### Random-Walker Requirements
 
-Adjust walk parameters based on network size:
+`random_walker_profiling` accepts connected undirected or strongly connected directed,
+loop-free networks with nonnegative weights. It uses lower node index for a
+reproducible profile by default. To reproduce the original paper's stochastic
+selection hierarchy, supply an explicit RNG:
 
 ```julia
-n = size(A, 1)
+using Random
+paper_result = random_walker_profiling(
+    A; tie_break=:paper, rng=MersenneTwister(42),
+)
+```
 
-# For small networks (< 100 nodes)
-result_small = random_walker_profiling(A; n_walks=1000, walk_length=10)
+Directed inputs use total in-plus-out strength for ties and a lazy stationary
+iteration for the row-normalized random walk. Its convergence controls are
+`stationary_tol` and `stationary_max_iter`. The legacy `n_walks` and `walk_length`
+keywords remain accepted for compatibility but do not affect the result.
 
-# For larger networks
-result_large = random_walker_profiling(A; n_walks=n*100, walk_length=20)
+For slowly mixing directed graphs, inspect the solver directly or select the robust
+dense solve:
+
+```julia
+D = [0.0 2 0 1; 0 0 3 0; 4 0 0 1; 1 2 0 0]
+stationary = rossa_stationary_distribution(D; method=:linear)
+result = random_walker_profiling(D; stationary_method=:linear)
+```
+
+When paper-mode ties make node ranks unstable, summarize an ensemble:
+
+```julia
+ensemble = rossa_profile_ensemble(
+    A; n_runs=200, rng=MersenneTwister(42), threaded=true,
+)
+ensemble.rank_stability
 ```
 
 ### Directed Networks with MINRES/SVD
 
-For directed networks, use `minres_svd`:
+For separate sender and receiver roles rather than a stationary-flow profile, use
+`minres_svd_directed`:
 
 ```julia
 # Create a directed network (asymmetric matrix)
@@ -199,10 +224,11 @@ A_directed[2, 3] = 1.0  # 2 → 3
 A_directed[4, 1] = 1.0  # 4 → 1
 A_directed[5, 2] = 1.0  # 5 → 2
 
-result = minres_svd(A_directed)
+result = minres_svd_directed(A_directed)
 ```
 
-Note: The result averages in-coreness and out-coreness. For separate values, you would need to access the algorithm internals.
+`result.out_coreness` and `result.in_coreness` retain the two directed roles;
+`result.coreness` is their combined ranking.
 
 ## Multiple Core-Periphery Pairs
 
@@ -233,6 +259,52 @@ println("Number of CP pairs detected: $(result.n_pairs)")
 println("Pair labels: $(result.pair_labels)")
 println("Within-pair coreness: $(result.coreness)")
 ```
+
+Use `multiple_cp_pairs_config(A)`, or
+`multiple_cp_pairs(A; null_model=:configuration)`, for a degree-preserving
+configuration null.
+
+Use `pair_selection=:penalized` to discourage unsupported extra pairs and inspect
+`candidate_qualities` and `selection_scores` in the result.
+
+## Statistical Significance
+
+```julia
+using Random
+
+test_result = cp_significance(
+    A,
+    lip_discrete;
+    null_model=:configuration,
+    n_samples=199,
+    rng=MersenneTwister(42),
+)
+println(test_result.pvalue)
+```
+
+Additional nulls support directed binary and weighted networks:
+
+```julia
+weighted_A = adjacency_to_matrix(
+    [(1, 2, 0.5), (1, 3, 1.5), (2, 3, 2.5), (2, 4, 3.5)], 4,
+)
+
+directed_test = cp_significance(
+    A_directed, minres_svd_directed;
+    null_model=:directed_configuration,
+    n_samples=199,
+)
+
+weighted_test = cp_significance(
+    weighted_A, borgatti_everett_continuous;
+    null_model=:weight_permutation,
+    n_samples=199,
+)
+```
+
+Configuration switching must complete by default. The returned
+`null_diagnostics` records accepted swaps and attempts; accepting a shortfall requires
+an explicit `swap_shortfall=:warn` or `:accept`.
 
 ## Quality Assessment
 

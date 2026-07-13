@@ -1,0 +1,4 @@
+CorePeriphery.jl 0.2.0
+Julia 1.12.6
+Julia threads 1
+BLAS threads 1

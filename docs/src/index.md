@@ -13,10 +13,12 @@ This pattern appears in many real-world networks including social networks, econ
 
 ## Features
 
-- **10 detection algorithms** covering discrete, continuous, and multi-pair methods
+- **Published discrete, continuous, spectral, directed, and multi-pair methods**
 - **Weighted network support** for analyzing networks with edge weights
-- **Directed network support** via the MINRES/SVD algorithm
-- **Pure Julia implementation** with no dependencies beyond the standard library
+- **Directed in/out coreness** via `CPDirectedResult`
+- **Optional Graphs.jl integration** and sparse-matrix input
+- **Monte Carlo significance tests** with undirected, directed, and weighted nulls
+- **Matrix-free sparse kernels** for spectral, directed, and greedy methods
 - **Consistent API** with unified result structures across all algorithms
 
 ## Installation
@@ -62,16 +64,18 @@ println("Quality: ", result.quality)
 | Use Case | Recommended Algorithm |
 |----------|----------------------|
 | Fast binary classification | [`lip_discrete`](@ref) or [`label_switching_cp`](@ref) |
-| Continuous coreness scores | [`borgatti_everett_continuous`](@ref) or [`spectral_method`](@ref) |
-| Directed networks | [`minres_svd`](@ref) |
+| Continuous coreness scores | [`borgatti_everett_continuous`](@ref) or [`rombach_continuous`](@ref) |
+| Published spectral partition | [`spectral_method`](@ref) |
+| Directed networks | [`random_walker_profiling`](@ref) or [`minres_svd_directed`](@ref) |
+| Symmetric MINRES | [`minres_symmetric`](@ref) |
 | Multiple CP structures | [`multiple_cp_pairs`](@ref) |
 | Tunable core boundary | [`rombach_continuous`](@ref) |
-| Statistical significance | [`surprise_cp`](@ref) |
+| Statistical significance | [`cp_significance`](@ref) |
 
 ## Documentation
 
 ```@contents
-Pages = ["tutorial.md", "algorithms.md", "api.md"]
+Pages = ["tutorial.md", "algorithms.md", "contracts.md", "performance.md", "development.md", "migration.md", "api.md"]
 Depth = 2
 ```
 

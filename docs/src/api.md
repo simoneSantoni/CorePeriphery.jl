@@ -11,6 +11,10 @@ CorePeriphery
 ```@docs
 CPResult
 CPMultiResult
+CPDirectedResult
+CPSignificanceResult
+StationaryDistributionResult
+RossaEnsembleResult
 ```
 
 ## Detection Algorithms
@@ -22,7 +26,11 @@ borgatti_everett_continuous
 rombach_continuous
 spectral_method
 random_walker_profiling
+rossa_stationary_distribution
+rossa_profile_ensemble
 minres_svd
+minres_symmetric
+minres_svd_directed
 ```
 
 ### Discrete Methods
@@ -38,6 +46,7 @@ label_switching_cp
 
 ```@docs
 multiple_cp_pairs
+multiple_cp_pairs_config
 ```
 
 ## Utility Functions
@@ -47,6 +56,7 @@ adjacency_to_matrix
 ideal_cp_matrix
 core_quality
 coreness_scores
+cp_significance
 ```
 
 ## Index

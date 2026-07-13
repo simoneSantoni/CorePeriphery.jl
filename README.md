@@ -5,7 +5,7 @@
 [![Coverage](https://codecov.io/gh/simoneSantoni/CorePeriphery.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/simoneSantoni/CorePeriphery.jl)
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://simoneSantoni.github.io/CorePeriphery.jl/stable/)
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://simoneSantoni.github.io/CorePeriphery.jl/dev/)
-[![Julia](https://img.shields.io/badge/Julia-1.6+-purple.svg)](https://julialang.org/)
+[![Julia](https://img.shields.io/badge/Julia-1.10+-purple.svg)](https://julialang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Julia package implementing various algorithms for detecting core-periphery structure in networks.
@@ -21,8 +21,9 @@ This package provides multiple algorithms for detecting and quantifying core-per
 ## Installation
 
 ```julia
-# Add the src directory to your load path
-push!(LOAD_PATH, "path/to/cp/src")
+# From a checkout of this repository:
+using Pkg
+Pkg.activate(".")
 using CorePeriphery
 ```
 
@@ -44,7 +45,7 @@ Binary classification optimizing correlation with ideal discrete pattern Δ[i,j]
 ```julia
 result = lip_discrete(A)
 ```
-Efficient swap-based optimization for discrete core-periphery bipartitioning.
+Lip's exact degree-prefix minimizer for simple, undirected binary graphs.
 
 ### 4. Rombach's Generalized Model
 ```julia
@@ -56,37 +57,51 @@ Continuous model with parameters controlling boundary sharpness (α) and core si
 ```julia
 result = spectral_method(A)
 ```
-Uses the leading eigenvector of the adjacency matrix to determine coreness.
+Cucuringu et al.'s LowRank-Core rank-two reconstruction and Find-Cut
+partitioning algorithm.
 
 ### 6. Random Walker Profiling
 ```julia
-result = random_walker_profiling(A; n_walks=1000, walk_length=10)
+result = random_walker_profiling(A)
 ```
-Nodes visited more frequently by random walks are classified as more core-like.
+Della Rossa persistence profiling for connected undirected or strongly connected
+directed, nonnegative networks. The reproducible default resolves final ties by node
+index; use `tie_break=:paper` with an explicit `rng` for the paper's stochastic rule.
+Directed inputs use the stationary distribution of their row-normalized random walk.
+Use `rossa_profile_ensemble` for uncertainty across paper-mode tie realizations.
 
 ### 7. MINRES/SVD Method
 ```julia
 result = minres_svd(A)
 ```
 Minimizes residual to find in-coreness and out-coreness vectors. Works with asymmetric (directed) networks.
+Use `minres_svd_directed` to retain both vectors and the residual; `minres_svd`
+returns the backward-compatible combined `CPResult`.
+Use `minres_symmetric` for the distinct symmetric rank-one model.
 
 ### 8. Multiple Core-Periphery Pairs
 ```julia
 result = multiple_cp_pairs(A; max_pairs=10, min_pair_size=2)
 ```
-Detects multiple non-overlapping core-periphery pairs using Q^cp quality function. Returns `CPMultiResult` with pair assignments.
+Jointly switches pair and core/periphery labels using the Q^cp objective.
+Erdős-Rényi (`null_model=:er`), undirected degree configuration
+(`:configuration`), directed in/out-degree configuration
+(`:directed_configuration`), and fixed-topology weight permutation
+(`:weight_permutation`) nulls are available.
+Penalized pair-count selection is available through `pair_selection=:penalized`.
 
 ### 9. Surprise-Based Detection
 ```julia
 result = surprise_cp(A)
 ```
-Uses multinomial hypergeometric distribution to compute statistical surprise of CP structure.
+Optimizes the multivariate-hypergeometric joint-tail surprise in log space for
+simple, undirected binary graphs.
 
 ### 10. Label-Switching Algorithm
 ```julia
 result = label_switching_cp(A)
 ```
-Fast greedy algorithm with efficient O(n) updates per iteration for discrete CP detection.
+Seedable, multi-start greedy optimization of the discrete Pearson objective.
 
 ## Usage
 
@@ -120,7 +135,8 @@ All algorithms return a `CPResult` with:
 - `coreness::Vector{Float64}`: Coreness score for each node (0 to 1)
 - `core_nodes::Vector{Int}`: Indices of nodes classified as core
 - `periphery_nodes::Vector{Int}`: Indices of nodes classified as periphery
-- `quality::Float64`: Quality score (correlation with ideal pattern)
+- `quality::Float64`: Algorithm-specific quality score. Do not compare raw
+  values across methods with different objectives.
 - `algorithm::String`: Name of the algorithm used
 
 ### Comparing Algorithms
@@ -149,7 +165,29 @@ println("$(result_multi.algorithm): $(result_multi.n_pairs) pairs detected")
 
 ### Weighted Networks
 
-The algorithms support weighted adjacency matrices:
+Weighted nonnegative adjacency matrices are supported by the continuous
+Borgatti-Everett, Rombach, random-walker, MINRES, and multi-pair methods.
+Lip, LowRank-Core, and Surprise require binary input. Significance supports binary
+ER/configuration nulls and a fixed-topology weighted permutation null. Check each
+method's documentation for symmetry and connectivity requirements.
+
+### Graphs.jl and sparse matrices
+
+Loading Graphs.jl activates an optional extension, allowing graph objects to be
+passed directly to every detector. `adjacency_to_matrix(graph)` returns a sparse
+`Float64` matrix. Sparse inputs use nonzero-based validation and quality kernels,
+matrix-free ARPACK eigenpairs for LowRank-Core, sparse matrix-vector products for
+directed MINRES, and adjacency-list multi-pair updates.
+
+### Significance testing
+
+`cp_significance(A, detector)` compares observed quality with undirected ER,
+undirected or directed degree-preserving, or weight-permutation null samples and returns a
+`CPSignificanceResult` with the null distribution and plus-one Monte Carlo
+p-value. Start Julia with multiple threads and pass `threaded=true` to distribute
+samples reproducibly across threads. On Julia 1.12, `thread_schedule=:auto`
+selects between greedy task-local scheduling and static workers using the null
+model and sample count; either schedule can be requested explicitly.
 
 ```julia
 weighted_edges = [
@@ -180,7 +218,8 @@ scores = coreness_scores(result)
 ## Running Tests
 
 ```julia
-include("test/test_coreperiphery.jl")
+using Pkg
+Pkg.test()
 ```
 
 ## Running Examples
@@ -188,6 +227,18 @@ include("test/test_coreperiphery.jl")
 ```julia
 include("examples/basic_usage.jl")
 ```
+
+## Cross-Package Benchmark
+
+See [benchmark/COMPARISON.md](benchmark/COMPARISON.md) for reproducible fits of
+the comparable CorePeriphery.jl and Python `cpnet` algorithms on identical
+ideal, noisy single-pair, and planted two-pair networks.
+
+The [development record and roadmap](docs/src/development.md) documents the scientific
+audit, implementation and performance refactor, Rossa paper review, completed
+validation, known limitations, and prioritized follow-up work.
+Users upgrading from 0.2 should read the [migration guide](docs/src/migration.md) and
+[changelog](CHANGELOG.md) before comparing stored scores.
 
 ## References
 

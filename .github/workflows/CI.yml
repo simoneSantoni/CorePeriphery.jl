@@ -21,24 +21,24 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.6'
-          - '1'
+          - '1.10'
+          - '1.12'
           - 'nightly'
         os:
           - ubuntu-latest
         arch:
           - x64
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v2
+      - uses: codecov/codecov-action@v6
         with:
           files: lcov.info
   docs:
@@ -47,10 +47,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
         with:
-          version: '1'
+          version: '1.12'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-docdeploy@v1
         env:
@@ -61,3 +61,25 @@ jobs:
             using CorePeriphery
             DocMeta.setdocmeta!(CorePeriphery, :DocTestSetup, :(using CorePeriphery); recursive=true)
             doctest(CorePeriphery)'
+
+  quality-gate:
+    name: Julia ${{ matrix.version }} determinism and scaling gate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.10', '1.12']
+    env:
+      JULIA_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ matrix.version }}
+          arch: x64
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Check threaded significance determinism
+        run: julia --project=. test/significance.jl
+      - name: Check scaling and allocation guardrails
+        run: julia --project=. benchmark/scaling.jl --quick --check

@@ -49,11 +49,15 @@ using CorePeriphery
 
 ## CI
 
-GitHub Actions ([.github/workflows/CI.yml](.github/workflows/CI.yml)) runs tests on Julia 1.6, latest stable, and nightly. Docs are built and deployed to GitHub Pages on pushes to main.
+GitHub Actions ([.github/workflows/CI.yml](.github/workflows/CI.yml)) runs tests on Julia 1.10, Julia 1.12, and nightly. Docs are built and deployed to GitHub Pages on pushes to main.
 
 ## Architecture
 
-The package is implemented as a single module in [src/CorePeriphery.jl](src/CorePeriphery.jl) (~1200 lines) with no external dependencies beyond Julia's standard library (LinearAlgebra, Statistics, Random). The `algo/` directory contains reference papers for each algorithm.
+The main module is [src/CorePeriphery.jl](src/CorePeriphery.jl), with focused
+implementations in `src/spectral.jl`, `src/multipair.jl`, `src/directed.jl`,
+and `src/significance.jl`. Core dependencies are Julia standard libraries;
+Graphs.jl integration is provided through an optional package extension. The
+`algo/` directory contains reference papers.
 
 ### Result Types
 
@@ -83,10 +87,10 @@ All algorithms accept an adjacency matrix `A::Matrix{Float64}`. Line ranges are 
 | Borgatti-Everett Discrete | `borgatti_everett_discrete(A)` | Discrete | 273-336 |
 | Lip's Fast Discrete | `lip_discrete(A)` | Discrete | 337-442 |
 | Rombach Generalized | `rombach_continuous(A)` | Continuous | 443-564 |
-| Spectral Method | `spectral_method(A)` | Continuous | 565-612 |
-| Random Walker Profiling | `random_walker_profiling(A)` | Continuous | 613-683 |
-| MINRES/SVD | `minres_svd(A)` | Continuous | 727-827 |
-| Multiple CP Pairs | `multiple_cp_pairs(A)` | Multi-pair | 828-961 |
+| LowRank-Core/Find-Cut | `spectral_method(A)` | Discrete partition + scores | `src/spectral.jl` |
+| Random Walker Profiling | `random_walker_profiling(A)` | Continuous persistence | main module |
+| MINRES/SVD | `minres_svd_directed(A)` | Directed continuous | `src/directed.jl` |
+| Multiple CP Pairs | `multiple_cp_pairs(A)` | Joint multi-pair | `src/multipair.jl` |
 | Surprise-Based | `surprise_cp(A)` | Discrete | 962-1082 |
 | Label Switching | `label_switching_cp(A)` | Discrete | 1083-1198 |
 
@@ -94,7 +98,7 @@ All algorithms accept an adjacency matrix `A::Matrix{Float64}`. Line ranges are 
 
 - **Fast discrete classification**: `lip_discrete` or `label_switching_cp`
 - **Continuous coreness scores**: `borgatti_everett_continuous` or `spectral_method`
-- **Directed/asymmetric networks**: `minres_svd`
+- **Directed/asymmetric networks**: `minres_svd_directed`
 - **Multiple CP structures**: `multiple_cp_pairs`
 - **Tunable core boundary**: `rombach_continuous` (use `alpha` for sharpness, `beta` for core size)
 
@@ -107,10 +111,11 @@ All algorithms accept an adjacency matrix `A::Matrix{Float64}`. Line ranges are 
 
 ## Key Implementation Details
 
-- Adjacency matrices are always `Matrix{Float64}`, symmetric for undirected networks
+- Algorithms accept real abstract matrices; method-specific validation governs symmetry, binary/weighted input, and connectivity.
+- Graphs.jl inputs are supported through an optional extension on all supported Julia versions.
 - Coreness scores are normalized to [0,1] range after optimization
 - Core/periphery classification uses median coreness as threshold
-- Weighted networks are supported - edge weights are preserved in the adjacency matrix
+- Weighted support is method-specific; Lip, LowRank-Core, Surprise, and significance null sampling require binary graphs.
 - Algorithms use coordinate ascent, greedy swaps, or spectral decomposition depending on the method
 
 ## Testing

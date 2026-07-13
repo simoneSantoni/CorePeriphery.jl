@@ -1,0 +1,7 @@
+variant pre_refactor
+storage dense
+CorePeriphery.jl 0.1.0
+Julia 1.12.4
+Julia threads 1
+BLAS threads 1
+active project /tmp/CorePeriphery-pre-refactor/Project.toml
