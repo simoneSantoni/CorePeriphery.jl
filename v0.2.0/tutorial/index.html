@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorial · CorePeriphery.jl</title><meta name="title" content="Tutorial · CorePeriphery.jl"/><meta property="og:title" content="Tutorial · CorePeriphery.jl"/><meta property="twitter:title" content="Tutorial · CorePeriphery.jl"/><meta name="description" content="Documentation for CorePeriphery.jl."/><meta property="og:description" content="Documentation for CorePeriphery.jl."/><meta property="twitter:description" content="Documentation for CorePeriphery.jl."/><meta property="og:url" content="https://simoneSantoni.github.io/CorePeriphery.jl/tutorial/"/><meta property="twitter:url" content="https://simoneSantoni.github.io/CorePeriphery.jl/tutorial/"/><link rel="canonical" href="https://simoneSantoni.github.io/CorePeriphery.jl/tutorial/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="CorePeriphery.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">CorePeriphery.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li class="is-active"><a class="tocitem" href>Tutorial</a><ul class="internal"><li><a class="tocitem" href="#Creating-Networks"><span>Creating Networks</span></a></li><li><a class="tocitem" href="#Basic-Core-Periphery-Detection"><span>Basic Core-Periphery Detection</span></a></li><li><a class="tocitem" href="#Comparing-Algorithms"><span>Comparing Algorithms</span></a></li><li><a class="tocitem" href="#Working-with-Specific-Algorithms"><span>Working with Specific Algorithms</span></a></li><li><a class="tocitem" href="#Multiple-Core-Periphery-Pairs"><span>Multiple Core-Periphery Pairs</span></a></li><li><a class="tocitem" href="#Statistical-Significance"><span>Statistical Significance</span></a></li><li><a class="tocitem" href="#Quality-Assessment"><span>Quality Assessment</span></a></li><li><a class="tocitem" href="#Synthetic-Network-Generation"><span>Synthetic Network Generation</span></a></li></ul></li><li><a class="tocitem" href="../algorithms/">Algorithms</a></li><li><a class="tocitem" href="../contracts/">Contracts</a></li><li><a class="tocitem" href="../performance/">Performance</a></li><li><a class="tocitem" href="../development/">Development Record</a></li><li><a class="tocitem" href="../migration/">Migration Guide</a></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Tutorial</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Tutorial</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/simoneSantoni/CorePeriphery.jl/blob/main/docs/src/tutorial.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Tutorial"><a class="docs-heading-anchor" href="#Tutorial">Tutorial</a><a id="Tutorial-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorial" title="Permalink"></a></h1><p>This tutorial walks through common use cases for CorePeriphery.jl.</p><h2 id="Creating-Networks"><a class="docs-heading-anchor" href="#Creating-Networks">Creating Networks</a><a id="Creating-Networks-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-Networks" title="Permalink"></a></h2><h3 id="From-Edge-Lists"><a class="docs-heading-anchor" href="#From-Edge-Lists">From Edge Lists</a><a id="From-Edge-Lists-1"></a><a class="docs-heading-anchor-permalink" href="#From-Edge-Lists" title="Permalink"></a></h3><p>The most common way to create a network is from an edge list:</p><pre><code class="language-julia hljs">using CorePeriphery
+
+# Unweighted edges as (source, target) tuples
+edges = [
+    (1, 2), (1, 3), (1, 4),
+    (2, 3), (2, 4),
+    (3, 4),
+    (5, 1), (6, 2)  # Peripheral nodes
+]
+A = adjacency_to_matrix(edges, 6)</code></pre><h3 id="Weighted-Networks"><a class="docs-heading-anchor" href="#Weighted-Networks">Weighted Networks</a><a id="Weighted-Networks-1"></a><a class="docs-heading-anchor-permalink" href="#Weighted-Networks" title="Permalink"></a></h3><p>For weighted networks, include weights as the third element:</p><pre><code class="language-julia hljs">weighted_edges = [
+    (1, 2, 5.0),  # Strong connection
+    (1, 3, 3.0),
+    (2, 3, 4.0),
+    (4, 1, 1.0),  # Weak peripheral connection
+]
+A = adjacency_to_matrix(weighted_edges, 4)</code></pre><h3 id="From-Existing-Matrices"><a class="docs-heading-anchor" href="#From-Existing-Matrices">From Existing Matrices</a><a id="From-Existing-Matrices-1"></a><a class="docs-heading-anchor-permalink" href="#From-Existing-Matrices" title="Permalink"></a></h3><p>If you already have an adjacency matrix, you can use it directly:</p><pre><code class="language-julia hljs">using LinearAlgebra
+
+# Create a 6x6 adjacency matrix
+A = zeros(6, 6)
+A[1, 2] = A[2, 1] = 1.0
+A[1, 3] = A[3, 1] = 1.0
+# ... etc</code></pre><h2 id="Basic-Core-Periphery-Detection"><a class="docs-heading-anchor" href="#Basic-Core-Periphery-Detection">Basic Core-Periphery Detection</a><a id="Basic-Core-Periphery-Detection-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Core-Periphery-Detection" title="Permalink"></a></h2><h3 id="Running-an-Algorithm"><a class="docs-heading-anchor" href="#Running-an-Algorithm">Running an Algorithm</a><a id="Running-an-Algorithm-1"></a><a class="docs-heading-anchor-permalink" href="#Running-an-Algorithm" title="Permalink"></a></h3><p>All algorithms follow the same pattern:</p><pre><code class="language-julia hljs">result = borgatti_everett_continuous(A)</code></pre><h3 id="Understanding-Results"><a class="docs-heading-anchor" href="#Understanding-Results">Understanding Results</a><a id="Understanding-Results-1"></a><a class="docs-heading-anchor-permalink" href="#Understanding-Results" title="Permalink"></a></h3><p>The result is a <code>CPResult</code> struct with several fields:</p><pre><code class="language-julia hljs"># Coreness scores (0 to 1, higher = more core-like)
+println(result.coreness)
+
+# Nodes classified as core
+println(result.core_nodes)
+
+# Nodes classified as periphery
+println(result.periphery_nodes)
+
+# Algorithm-specific quality score
+println(result.quality)
+
+# Algorithm name
+println(result.algorithm)</code></pre><h3 id="Visualizing-Results"><a class="docs-heading-anchor" href="#Visualizing-Results">Visualizing Results</a><a id="Visualizing-Results-1"></a><a class="docs-heading-anchor-permalink" href="#Visualizing-Results" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Sort nodes by coreness
+sorted_idx = sortperm(result.coreness, rev=true)
+
+println(&quot;Node ranking by coreness:&quot;)
+for (rank, idx) in enumerate(sorted_idx)
+    score = round(result.coreness[idx], digits=3)
+    label = idx in result.core_nodes ? &quot;CORE&quot; : &quot;PERIPHERY&quot;
+    println(&quot;  $rank. Node $idx: $score ($label)&quot;)
+end</code></pre><h2 id="Comparing-Algorithms"><a class="docs-heading-anchor" href="#Comparing-Algorithms">Comparing Algorithms</a><a id="Comparing-Algorithms-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-Algorithms" title="Permalink"></a></h2><p>Different algorithms may identify different core-periphery structures:</p><pre><code class="language-julia hljs"># Run multiple algorithms
+results = [
+    borgatti_everett_continuous(A),
+    borgatti_everett_discrete(A),
+    lip_discrete(A),
+    spectral_method(A),
+    random_walker_profiling(A),
+    minres_svd(A),
+    surprise_cp(A),
+    label_switching_cp(A)
+]
+
+# Display quality scores. Their scales differ by method, so do not rank
+# algorithms by these raw values.
+println(&quot;Algorithm Comparison:&quot;)
+println(&quot;-&quot; ^ 50)
+for r in results
+    q = round(r.quality, digits=4)
+    n_core = length(r.core_nodes)
+    println(&quot;$(rpad(r.algorithm, 30)) Quality: $q  Core: $n_core&quot;)
+end</code></pre><h3 id="Measuring-Agreement"><a class="docs-heading-anchor" href="#Measuring-Agreement">Measuring Agreement</a><a id="Measuring-Agreement-1"></a><a class="docs-heading-anchor-permalink" href="#Measuring-Agreement" title="Permalink"></a></h3><p>To compare which nodes different algorithms classify as core:</p><pre><code class="language-julia hljs">using Statistics
+
+function jaccard_similarity(set1, set2)
+    intersection = length(intersect(Set(set1), Set(set2)))
+    union = length(union(Set(set1), Set(set2)))
+    return union &gt; 0 ? intersection / union : 1.0
+end
+
+# Compare core node sets
+r1 = borgatti_everett_continuous(A)
+r2 = spectral_method(A)
+
+similarity = jaccard_similarity(r1.core_nodes, r2.core_nodes)
+println(&quot;Jaccard similarity of core sets: $similarity&quot;)</code></pre><h2 id="Working-with-Specific-Algorithms"><a class="docs-heading-anchor" href="#Working-with-Specific-Algorithms">Working with Specific Algorithms</a><a id="Working-with-Specific-Algorithms-1"></a><a class="docs-heading-anchor-permalink" href="#Working-with-Specific-Algorithms" title="Permalink"></a></h2><h3 id="Tuning-Rombach&#39;s-Model"><a class="docs-heading-anchor" href="#Tuning-Rombach&#39;s-Model">Tuning Rombach&#39;s Model</a><a id="Tuning-Rombach&#39;s-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Tuning-Rombach&#39;s-Model" title="Permalink"></a></h3><p>The Rombach model has parameters to control the core-periphery structure:</p><pre><code class="language-julia hljs"># Sharp boundary, small core
+result1 = rombach_continuous(A; alpha=0.9, beta=0.3)
+
+# Soft boundary, large core
+result2 = rombach_continuous(A; alpha=0.1, beta=0.7)
+
+# Grid search over parameters
+best_quality = -Inf
+best_params = nothing
+
+for alpha in 0.1:0.2:0.9
+    for beta in 0.1:0.2:0.9
+        r = rombach_continuous(A; alpha=alpha, beta=beta, n_runs=3)
+        if r.quality &gt; best_quality
+            best_quality = r.quality
+            best_params = (alpha=alpha, beta=beta)
+        end
+    end
+end
+
+println(&quot;Best parameters: α=$(best_params.alpha), β=$(best_params.beta)&quot;)</code></pre><h3 id="Random-Walker-Requirements"><a class="docs-heading-anchor" href="#Random-Walker-Requirements">Random-Walker Requirements</a><a id="Random-Walker-Requirements-1"></a><a class="docs-heading-anchor-permalink" href="#Random-Walker-Requirements" title="Permalink"></a></h3><p><code>random_walker_profiling</code> accepts connected undirected or strongly connected directed, loop-free networks with nonnegative weights. It uses lower node index for a reproducible profile by default. To reproduce the original paper&#39;s stochastic selection hierarchy, supply an explicit RNG:</p><pre><code class="language-julia hljs">using Random
+paper_result = random_walker_profiling(
+    A; tie_break=:paper, rng=MersenneTwister(42),
+)</code></pre><p>Directed inputs use total in-plus-out strength for ties and a lazy stationary iteration for the row-normalized random walk. Its convergence controls are <code>stationary_tol</code> and <code>stationary_max_iter</code>. The legacy <code>n_walks</code> and <code>walk_length</code> keywords remain accepted for compatibility but do not affect the result.</p><p>For slowly mixing directed graphs, inspect the solver directly or select the robust dense solve:</p><pre><code class="language-julia hljs">D = [0.0 2 0 1; 0 0 3 0; 4 0 0 1; 1 2 0 0]
+stationary = rossa_stationary_distribution(D; method=:linear)
+result = random_walker_profiling(D; stationary_method=:linear)</code></pre><p>When paper-mode ties make node ranks unstable, summarize an ensemble:</p><pre><code class="language-julia hljs">ensemble = rossa_profile_ensemble(
+    A; n_runs=200, rng=MersenneTwister(42), threaded=true,
+)
+ensemble.rank_stability</code></pre><h3 id="Directed-Networks-with-MINRES/SVD"><a class="docs-heading-anchor" href="#Directed-Networks-with-MINRES/SVD">Directed Networks with MINRES/SVD</a><a id="Directed-Networks-with-MINRES/SVD-1"></a><a class="docs-heading-anchor-permalink" href="#Directed-Networks-with-MINRES/SVD" title="Permalink"></a></h3><p>For separate sender and receiver roles rather than a stationary-flow profile, use <code>minres_svd_directed</code>:</p><pre><code class="language-julia hljs"># Create a directed network (asymmetric matrix)
+A_directed = zeros(5, 5)
+A_directed[1, 2] = 1.0  # 1 → 2
+A_directed[1, 3] = 1.0  # 1 → 3
+A_directed[2, 3] = 1.0  # 2 → 3
+A_directed[4, 1] = 1.0  # 4 → 1
+A_directed[5, 2] = 1.0  # 5 → 2
+
+result = minres_svd_directed(A_directed)</code></pre><p><code>result.out_coreness</code> and <code>result.in_coreness</code> retain the two directed roles; <code>result.coreness</code> is their combined ranking.</p><h2 id="Multiple-Core-Periphery-Pairs"><a class="docs-heading-anchor" href="#Multiple-Core-Periphery-Pairs">Multiple Core-Periphery Pairs</a><a id="Multiple-Core-Periphery-Pairs-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-Core-Periphery-Pairs" title="Permalink"></a></h2><p>Some networks contain multiple distinct CP structures:</p><pre><code class="language-julia hljs"># Create a network with two communities, each with CP structure
+A = zeros(12, 12)
+
+# Community 1 (nodes 1-6): nodes 1-2 are core
+for i in 1:2, j in 1:6
+    if i != j
+        A[i, j] = A[j, i] = 1.0
+    end
+end
+
+# Community 2 (nodes 7-12): nodes 7-8 are core
+for i in 7:8, j in 7:12
+    if i != j
+        A[i, j] = A[j, i] = 1.0
+    end
+end
+
+# Detect multiple pairs
+result = multiple_cp_pairs(A)
+
+println(&quot;Number of CP pairs detected: $(result.n_pairs)&quot;)
+println(&quot;Pair labels: $(result.pair_labels)&quot;)
+println(&quot;Within-pair coreness: $(result.coreness)&quot;)</code></pre><p>Use <code>multiple_cp_pairs_config(A)</code>, or <code>multiple_cp_pairs(A; null_model=:configuration)</code>, for a degree-preserving configuration null.</p><p>Use <code>pair_selection=:penalized</code> to discourage unsupported extra pairs and inspect <code>candidate_qualities</code> and <code>selection_scores</code> in the result.</p><h2 id="Statistical-Significance"><a class="docs-heading-anchor" href="#Statistical-Significance">Statistical Significance</a><a id="Statistical-Significance-1"></a><a class="docs-heading-anchor-permalink" href="#Statistical-Significance" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Random
+
+test_result = cp_significance(
+    A,
+    lip_discrete;
+    null_model=:configuration,
+    n_samples=199,
+    rng=MersenneTwister(42),
+)
+println(test_result.pvalue)</code></pre><p>Additional nulls support directed binary and weighted networks:</p><pre><code class="language-julia hljs">weighted_A = adjacency_to_matrix(
+    [(1, 2, 0.5), (1, 3, 1.5), (2, 3, 2.5), (2, 4, 3.5)], 4,
+)
+
+directed_test = cp_significance(
+    A_directed, minres_svd_directed;
+    null_model=:directed_configuration,
+    n_samples=199,
+)
+
+weighted_test = cp_significance(
+    weighted_A, borgatti_everett_continuous;
+    null_model=:weight_permutation,
+    n_samples=199,
+)</code></pre><p>Configuration switching must complete by default. The returned <code>null_diagnostics</code> records accepted swaps and attempts; accepting a shortfall requires an explicit <code>swap_shortfall=:warn</code> or <code>:accept</code>.</p><h2 id="Quality-Assessment"><a class="docs-heading-anchor" href="#Quality-Assessment">Quality Assessment</a><a id="Quality-Assessment-1"></a><a class="docs-heading-anchor-permalink" href="#Quality-Assessment" title="Permalink"></a></h2><h3 id="Computing-Quality-Manually"><a class="docs-heading-anchor" href="#Computing-Quality-Manually">Computing Quality Manually</a><a id="Computing-Quality-Manually-1"></a><a class="docs-heading-anchor-permalink" href="#Computing-Quality-Manually" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Get a coreness vector (from algorithm or custom)
+c = result.coreness
+
+# Compute quality with continuous ideal pattern
+q_cont = core_quality(A, c; discrete=false)
+
+# Compute quality with discrete ideal pattern
+c_binary = Float64.(c .&gt;= median(c))
+q_disc = core_quality(A, c_binary; discrete=true)
+
+println(&quot;Continuous quality: $q_cont&quot;)
+println(&quot;Discrete quality: $q_disc&quot;)</code></pre><h3 id="Ideal-Pattern-Visualization"><a class="docs-heading-anchor" href="#Ideal-Pattern-Visualization">Ideal Pattern Visualization</a><a id="Ideal-Pattern-Visualization-1"></a><a class="docs-heading-anchor-permalink" href="#Ideal-Pattern-Visualization" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Generate the ideal CP matrix
+c = [1.0, 0.9, 0.8, 0.3, 0.2, 0.1]  # Example coreness
+ideal_cont = ideal_cp_matrix(c; discrete=false)
+ideal_disc = ideal_cp_matrix(c; discrete=true)
+
+# Compare with actual adjacency
+println(&quot;Continuous ideal pattern:&quot;)
+display(round.(ideal_cont, digits=2))
+
+println(&quot;\nDiscrete ideal pattern:&quot;)
+display(round.(ideal_disc, digits=2))</code></pre><h2 id="Synthetic-Network-Generation"><a class="docs-heading-anchor" href="#Synthetic-Network-Generation">Synthetic Network Generation</a><a id="Synthetic-Network-Generation-1"></a><a class="docs-heading-anchor-permalink" href="#Synthetic-Network-Generation" title="Permalink"></a></h2><p>For testing and validation, create networks with known CP structure:</p><pre><code class="language-julia hljs">using Random
+
+function generate_cp_network(n_core, n_periphery;
+                             p_cc=0.8, p_cp=0.4, p_pp=0.05, seed=nothing)
+    if seed !== nothing
+        Random.seed!(seed)
+    end
+
+    n = n_core + n_periphery
+    A = zeros(Float64, n, n)
+
+    for i in 1:n, j in (i+1):n
+        # Determine probability based on node types
+        if i &lt;= n_core &amp;&amp; j &lt;= n_core
+            p = p_cc  # Core-core
+        elseif i &lt;= n_core || j &lt;= n_core
+            p = p_cp  # Core-periphery
+        else
+            p = p_pp  # Periphery-periphery
+        end
+
+        if rand() &lt; p
+            A[i, j] = A[j, i] = 1.0
+        end
+    end
+
+    return A
+end
+
+# Generate and test
+A = generate_cp_network(5, 15; seed=42)
+result = borgatti_everett_continuous(A)
+
+# True labels (first 5 are core)
+true_core = Set(1:5)
+detected_core = Set(result.core_nodes)
+
+precision = length(intersect(true_core, detected_core)) / length(detected_core)
+recall = length(intersect(true_core, detected_core)) / length(true_core)
+
+println(&quot;Precision: $(round(precision, digits=3))&quot;)
+println(&quot;Recall: $(round(recall, digits=3))&quot;)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../algorithms/">Algorithms »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Monday 13 July 2026 14:08">Monday 13 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
