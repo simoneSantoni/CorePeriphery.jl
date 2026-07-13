@@ -265,7 +265,8 @@ Use `multiple_cp_pairs_config(A)`, or
 configuration null.
 
 Use `pair_selection=:penalized` to discourage unsupported extra pairs and inspect
-`candidate_qualities` and `selection_scores` in the result.
+`candidate_pair_counts`, `candidate_qualities`, and `selection_scores` in the
+result.
 
 ## Statistical Significance
 
@@ -280,6 +281,7 @@ test_result = cp_significance(
     rng=MersenneTwister(42),
 )
 println(test_result.pvalue)
+println(test_result.null_diagnostics)
 ```
 
 Additional nulls support directed binary and weighted networks:
@@ -303,8 +305,13 @@ weighted_test = cp_significance(
 ```
 
 Configuration switching must complete by default. The returned
-`null_diagnostics` records accepted swaps and attempts; accepting a shortfall requires
-an explicit `swap_shortfall=:warn` or `:accept`.
+`null_diagnostics` records the preserved constraint, requested and accepted
+swaps, attempts, and the attempt budget; accepting a shortfall requires an
+explicit `swap_shortfall=:warn` or `:accept`.
+
+If your detector accepts stochastic keywords, forward a fresh child RNG into
+each call with `pass_rng=true`. When you run many samples, `threaded=true`
+distributes them reproducibly across threads from a precomputed seed stream.
 
 ## Quality Assessment
 

@@ -18,6 +18,7 @@ This pattern appears in many real-world networks including social networks, econ
 - **Directed in/out coreness** via `CPDirectedResult`
 - **Optional Graphs.jl integration** and sparse-matrix input
 - **Monte Carlo significance tests** with undirected, directed, and weighted nulls
+  plus explicit swap-completion diagnostics
 - **Matrix-free sparse kernels** for spectral, directed, and greedy methods
 - **Consistent API** with unified result structures across all algorithms
 
@@ -71,6 +72,7 @@ println("Quality: ", result.quality)
 | Multiple CP structures | [`multiple_cp_pairs`](@ref) |
 | Tunable core boundary | [`rombach_continuous`](@ref) |
 | Statistical significance | [`cp_significance`](@ref) |
+| Configuration null convenience | [`multiple_cp_pairs_config`](@ref) |
 
 ## Documentation
 
@@ -90,3 +92,15 @@ Depth = 2
 7. Kojaku, S., Masuda, N. (2017). Finding multiple core-periphery pairs in networks. *Physical Review E*, 96(5), 052313.
 8. Jeude, J., et al. (2019). Detecting Core-Periphery Structures by Surprise. *EPL*, 125(6), 68001.
 9. Yanchenko, K., Sengupta, S. (2025). A fast label-switching algorithm for core-periphery detection in networks. *arXiv preprint*.
+
+## Citation
+
+```biblatex
+@misc{SantoniCorePeripheryJL,
+  author = {Santoni, Simone},
+  title = {CorePeriphery.jl: Core-Periphery Detection in Julia},
+  year = {2026},
+  url = {https://github.com/simoneSantoni/CorePeriphery.jl},
+  note = {Homepage: https://www.bayes.citystgeorges.ac.uk/faculties-and-research/experts/simone-santoni; GitHub: https://github.com/simoneSantoni}
+}
+```

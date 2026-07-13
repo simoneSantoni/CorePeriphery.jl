@@ -58,7 +58,8 @@ Continuous model with parameters controlling boundary sharpness (α) and core si
 result = spectral_method(A)
 ```
 Cucuringu et al.'s LowRank-Core rank-two reconstruction and Find-Cut
-partitioning algorithm.
+partitioning algorithm. The row-score coreness values come from the thresholded
+rank-two reconstruction, while the partition comes from the best Find-Cut prefix.
 
 ### 6. Random Walker Profiling
 ```julia
@@ -89,6 +90,8 @@ Erdős-Rényi (`null_model=:er`), undirected degree configuration
 (`:directed_configuration`), and fixed-topology weight permutation
 (`:weight_permutation`) nulls are available.
 Penalized pair-count selection is available through `pair_selection=:penalized`.
+Use `multiple_cp_pairs_config(A)` as a convenience wrapper for the
+configuration null.
 
 ### 9. Surprise-Based Detection
 ```julia
@@ -103,6 +106,16 @@ result = label_switching_cp(A)
 ```
 Seedable, multi-start greedy optimization of the discrete Pearson objective.
 
+### 11. Statistical Significance
+```julia
+result = cp_significance(A, lip_discrete; null_model=:configuration, n_samples=199)
+```
+Compares one detector's observed quality against a Monte Carlo null
+distribution. Supported nulls are `:er`, `:configuration`,
+`:directed_configuration`, and `:weight_permutation`. The wrapper can run
+threaded, forwards explicit RNGs to stochastic detectors, and records swap
+completion diagnostics for configuration-style nulls.
+
 ## Usage
 
 ### Basic Example
@@ -110,7 +123,7 @@ Seedable, multi-start greedy optimization of the discrete Pearson objective.
 ```julia
 using CorePeriphery
 
-# Create adjaCency matrix from edge list
+# Create adjacency matrix from edge list
 edges = [
     (1, 2), (1, 3), (1, 4), (1, 5),
     (2, 3), (2, 4), (2, 5),
@@ -187,7 +200,9 @@ undirected or directed degree-preserving, or weight-permutation null samples and
 p-value. Start Julia with multiple threads and pass `threaded=true` to distribute
 samples reproducibly across threads. On Julia 1.12, `thread_schedule=:auto`
 selects between greedy task-local scheduling and static workers using the null
-model and sample count; either schedule can be requested explicitly.
+model and sample count; either schedule can be requested explicitly. For
+configuration-style nulls, `swap_shortfall=:warn` or `:accept` makes incomplete
+proposal chains explicit, while the default is to require completion.
 
 ```julia
 weighted_edges = [
@@ -259,6 +274,18 @@ Users upgrading from 0.2 should read the [migration guide](docs/src/migration.md
 8. Jeude, J., et al. (2019). Detecting Core-Periphery Structures by Surprise. *EPL*, 125(6), 68001.
 
 9. Yanchenko, K., Sengupta, S. (2025). A fast label-switching algorithm for core-periphery detection in networks. *arXiv preprint*.
+
+## Citation
+
+```biblatex
+@misc{SantoniCorePeripheryJL,
+  author = {Santoni, Simone},
+  title = {CorePeriphery.jl: Core-Periphery Detection in Julia},
+  year = {2026},
+  url = {https://github.com/simoneSantoni/CorePeriphery.jl},
+  note = {I'm Simone Santoni. Homepage: https://www.bayes.citystgeorges.ac.uk/faculties-and-research/experts/simone-santoni; GitHub: https://github.com/simoneSantoni}
+}
+```
 
 ## License
 

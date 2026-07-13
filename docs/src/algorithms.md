@@ -108,8 +108,10 @@ matrix from its two eigenpairs of largest magnitude, threshold the rank-two
 matrix, rank nodes by its row sums, and apply Find-Cut.
 
 **Algorithm**: Rank-two symmetric eigendecomposition plus the published
-core/core-periphery/periphery density cut objective. Input is binary,
-undirected, and loop-free.
+core/core-periphery/periphery density cut objective. The returned `CPResult`
+contains the LowRank-Core row-score coreness values, while `core_nodes` and
+`periphery_nodes` come from the best Find-Cut prefix rather than a threshold on
+those scores. Input is binary, undirected, and loop-free.
 
 **Parameters**: `beta` sets the minimum fraction allowed in either side of the cut.
 
@@ -192,7 +194,8 @@ Detects multiple non-overlapping core-periphery pairs using the ``Q^{cp}`` quali
 2. Jointly propose each node as core or periphery in its own or a neighboring pair
 3. Accept only objective-improving moves across multiple restarts
 
-Returns a `CPMultiResult` with pair labels and within-pair coreness.
+Returns a `CPMultiResult` with pair labels, within-pair coreness, the chosen
+pair count, and the candidate qualities inspected during model selection.
 
 **Parameters**:
 
@@ -206,6 +209,35 @@ Returns a `CPMultiResult` with pair labels and within-pair coreness.
 - `pair_penalty`: Multiplier for ``(k-1)\log(n)/n`` (default: 0.5)
 
 **When to use**: When you expect the network to contain multiple distinct core-periphery structures rather than a single global one.
+
+Use `multiple_cp_pairs_config(A)` as a convenience wrapper for the degree-preserving
+configuration null.
+
+## Significance Testing
+
+```julia
+result = cp_significance(A, lip_discrete; null_model=:configuration, n_samples=199)
+```
+
+Compares one detector's observed `quality` against a Monte Carlo null
+distribution. The wrapper accepts any detector that returns a finite `quality`
+field and supports four null models:
+
+- `:er` for undirected Erdős-Rényi sampling
+- `:configuration` for undirected degree-preserving edge switching
+- `:directed_configuration` for directed in/out-degree-preserving arc switching
+- `:weight_permutation` for topology-preserving weight shuffling
+
+`pass_rng=true` forwards a fresh child RNG to detectors that accept stochastic
+keywords. With `threaded=true`, the null samples are distributed across threads
+deterministically from a precomputed seed stream. The default
+`thread_schedule=:auto` uses the same Julia 1.12 policy described on the
+performance page; use `:static` or `:greedy` to force one schedule.
+
+Configuration-style nulls require the requested swap budget to complete by
+default. Use `max_swap_attempts` to raise the proposal budget, or set
+`swap_shortfall=:warn` or `:accept` if an incomplete chain is scientifically
+acceptable and you want that fact recorded in `null_diagnostics`.
 
 ## Surprise-Based Detection
 
