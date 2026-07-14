@@ -17,6 +17,39 @@ Numba 0.66.0
 
 Quality values are reported by each package but are not directly comparable when objective definitions or scaling differ. Runtime is the median of five warmed fits; cpnet's Numba compilation is excluded. NumPy, Python, and Numba RNG state is reset before every cpnet fit. Both packages receive sparse matrices and BLAS is pinned to one thread by the benchmark launcher.
 
+## Timing summary
+
+The fixtures are deliberately small correctness-and-concordance cases, not a scaling
+study. Their sizes are:
+
+| Dataset | Nodes | Undirected edges | Density |
+|---|---:|---:|---:|
+| ideal_single | 20 | 85 | 44.7% |
+| noisy_single | 40 | 162 | 20.8% |
+| two_pairs | 48 | 124 | 11.0% |
+
+Each timing cell is `CorePeriphery.jl ms / cpnet ms (cpnet/Julia ratio)`. A ratio
+above 1 means the Julia call was faster. The fit-budget column is Julia / cpnet and is
+essential context for interpreting the ratio.
+
+| Algorithm | Fit budget (Julia / cpnet) | ideal_single | noisy_single | two_pairs | Median ratio | Julia faster |
+|---|---|---:|---:|---:|---:|---:|
+| BE | 1 deterministic fit / 5 starts | 0.004 / 0.139 (36.2×) | 0.008 / 1.172 (141.8×) | 0.008 / 1.539 (204.0×) | 141.8× | 3/3 |
+| Lip | 1 deterministic fit / 1 deterministic fit | 0.004 / 0.066 (17.7×) | 0.006 / 0.058 (10.3×) | 0.005 / 0.049 (9.5×) | 10.3× | 3/3 |
+| LowRankCore | 1 deterministic fit / 1 deterministic fit | 0.080 / 2.690 (33.6×) | 0.343 / 3.458 (10.1×) | 0.216 / 4.311 (20.0×) | 20.0× | 3/3 |
+| Rombach | 5 starts / 5 starts | 0.064 / 0.646 (10.0×) | 2.378 / 1.341 (0.6×) | 3.295 / 2.247 (0.7×) | 0.7× | 1/3 |
+| Rossa | 1 fit / 1 fit | 0.004 / 1.600 (416.1×) | 0.015 / 2.495 (171.7×) | 0.017 / 3.783 (222.6×) | 222.6× | 3/3 |
+| MINRES | 1 deterministic fit / 5 starts | 0.007 / 4.160 (623.8×) | 0.022 / 4.273 (196.8×) | 0.113 / 5.699 (50.5×) | 196.8× | 3/3 |
+| Surprise | 1 deterministic fit / 5 starts | 0.007 / 12.910 (1834.7×) | 0.932 / 48.760 (52.3×) | 0.285 / 43.590 (152.9×) | 152.9× | 3/3 |
+| KM_ER | 5 starts / 5 starts | 0.069 / 1.039 (15.1×) | 0.180 / 4.236 (23.6×) | 0.178 / 4.850 (27.2×) | 23.6× | 3/3 |
+| KM_config | 5 starts / 5 starts | 0.066 / 1.313 (19.9×) | 0.234 / 5.127 (21.9×) | 0.155 / 5.342 (34.4×) | 21.9× | 3/3 |
+
+The median ratio is the median of the three per-fixture ratios, not a ratio of pooled
+or cross-fixture runtimes. Sub-millisecond entries are especially sensitive to host
+load and timer noise.
+
+## Recovery and concordance details
+
 | Dataset | Algorithm | Spearman | Top-k Jaccard | Julia AUC | cpnet AUC | Pair ARI | Julia truth ARI | cpnet truth ARI | Julia ms | cpnet ms |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | ideal_single | BE | 0.882 | 1.000 | 1.000 | 0.967 | 1.000 | 1.000 | 1.000 | 0.004 | 0.139 |

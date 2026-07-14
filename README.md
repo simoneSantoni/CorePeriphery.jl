@@ -245,9 +245,10 @@ include("examples/basic_usage.jl")
 
 ## Cross-Package Benchmark
 
-See [benchmark/COMPARISON.md](benchmark/COMPARISON.md) for reproducible fits of
-the comparable CorePeriphery.jl and Python `cpnet` algorithms on identical
-ideal, noisy single-pair, and planted two-pair networks.
+See the website's [performance and benchmark section](docs/src/performance.md) for the
+complete nine-algorithm CorePeriphery.jl/`cpnet` timing summary, fit-budget caveats,
+and Julia scaling results. [benchmark/COMPARISON.md](benchmark/COMPARISON.md) retains
+the reproducible per-fixture recovery, concordance, and timing details.
 
 The [development record and roadmap](docs/src/development.md) documents the scientific
 audit, implementation and performance refactor, Rossa paper review, completed

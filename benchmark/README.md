@@ -30,6 +30,16 @@ the exact language, dependency, and upstream-commit versions.
 The row named `MINRES` fits the symmetric off-diagonal `w*w'` model in both packages;
 the directed Julia `u*v'` estimator is deliberately excluded from that row.
 
+The cross-package fixtures have 20, 40, and 48 nodes. They are primarily correctness
+and concordance cases, so their sub-millisecond timings must not be extrapolated to
+large networks. `COMPARISON.md` includes all nine comparable configurations (BE, Lip,
+LowRank-Core, Rombach, Rossa, symmetric MINRES, Surprise, KM-ER, and
+KM-configuration), every paired runtime, and each method's fit budget. The cpnet/Julia
+ratios compare configured estimators: cpnet uses five starts for BE, MINRES, and
+Surprise where CorePeriphery.jl uses deterministic fits.
+
+The website's performance page presents the same timing details for readers.
+
 ## Scaling and regression gate
 
 Independently of Python, `scaling.jl` is a dependency-free, warmed benchmark for dense and sparse

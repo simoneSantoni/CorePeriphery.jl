@@ -74,12 +74,38 @@ println("Quality: ", result.quality)
 | Statistical significance | [`cp_significance`](@ref) |
 | Configuration null convenience | [`multiple_cp_pairs_config`](@ref) |
 
-## Performance snapshot
+## Performance snapshots
+
+### CorePeriphery.jl compared with cpnet
+
+Across three identical planted fixtures and all nine comparable algorithm
+configurations, CorePeriphery.jl was faster in 25 of 27 warmed fits. The table reports
+the median cpnet/Julia runtime ratio across the three fixtures; a value above 1 means
+that the Julia call completed sooner.
+
+| Algorithm | Median cpnet/Julia ratio | Julia faster |
+|:----------|--------------------------:|-------------:|
+| Borgatti--Everett discrete (BE) | 141.8× | 3/3 |
+| Lip | 10.3× | 3/3 |
+| LowRank-Core | 20.0× | 3/3 |
+| Rombach | 0.7× | 1/3 |
+| Rossa | 222.6× | 3/3 |
+| symmetric MINRES | 196.8× | 3/3 |
+| Surprise | 152.9× | 3/3 |
+| KM-ER | 23.6× | 3/3 |
+| KM-configuration | 21.9× | 3/3 |
+
+These are configured-estimator timings on small `n = 20, 40, 48` fixtures, not
+equal-work or large-network speedups. Several cpnet configurations use more stochastic
+starts than their deterministic Julia counterparts. See [Performance](@ref) for every
+timing pair, fit budgets, fixture densities, methodology, and interpretation limits.
+
+### Julia dense and sparse scaling
 
 CorePeriphery.jl provides matrix-free sparse paths for its principal spectral,
-directed, and greedy algorithms. On the package's synthetic `n = 512` benchmark,
-the following warmed median runtimes were measured with Julia 1.12, one BLAS
-thread, and seven repetitions:
+directed, and greedy algorithms. On the package's synthetic `n = 512` scaling fixture,
+the following warmed median runtimes were measured with Julia 1.12, one BLAS thread,
+and seven repetitions:
 
 | Algorithm | Dense | Sparse | Sparse speedup |
 |:----------|------:|-------:|---------------:|
@@ -89,10 +115,9 @@ thread, and seven repetitions:
 | [`random_walker_profiling`](@ref) | 18.480 ms | 0.832 ms | 22.2× |
 | [`minres_svd_directed`](@ref) (`max_iter = 50`) | 7.096 ms | 0.675 ms | 10.5× |
 
-Absolute timings are host-specific. These results are intended to show the effect
-of sparse storage on the benchmark fixture, not to predict runtime for every
-network. See [Performance](@ref) for workload details, allocation measurements,
-Julia 1.10 results, and reproduction instructions.
+Absolute timings are host-specific. The scaling results show the effect of sparse
+storage on the benchmark fixture and are not intended to predict runtime for every
+network.
 
 ## Documentation
 

@@ -105,8 +105,9 @@ automatic speedup for tiny graphs; it was faster in 11 of the 27 small-network f
 
 Across three planted networks and nine comparable algorithm configurations,
 CorePeriphery.jl was faster in 25 of 27 warmed rows, with a median cpnet/Julia runtime
-ratio of 33.8x in the release-candidate rerun. The comparison reflects each package's configured estimator and restart
-policy, so it must not be interpreted as equal low-level work.
+ratio of 33.6x in the checked comparison. The comparison reflects each package's
+configured estimator and restart policy, so it must not be interpreted as equal
+low-level work.
 
 Lower concordance was traced to algorithmic or output-definition differences:
 

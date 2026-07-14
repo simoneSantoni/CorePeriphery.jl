@@ -7,6 +7,33 @@ from scipy.stats import rankdata, spearmanr
 
 ROOT = Path(__file__).resolve().parent
 
+ALGORITHM_ORDER = (
+    "BE",
+    "Lip",
+    "LowRankCore",
+    "Rombach",
+    "Rossa",
+    "MINRES",
+    "Surprise",
+    "KM_ER",
+    "KM_config",
+)
+
+# A timed call includes the configured estimator, not a normalized amount of
+# optimizer work. Keep the budgets beside the timings so the ratios are not
+# interpreted as equal-work kernel speedups.
+FIT_BUDGET = {
+    "BE": "1 deterministic fit / 5 starts",
+    "Lip": "1 deterministic fit / 1 deterministic fit",
+    "LowRankCore": "1 deterministic fit / 1 deterministic fit",
+    "Rombach": "5 starts / 5 starts",
+    "Rossa": "1 fit / 1 fit",
+    "MINRES": "1 deterministic fit / 5 starts",
+    "Surprise": "1 deterministic fit / 5 starts",
+    "KM_ER": "5 starts / 5 starts",
+    "KM_config": "5 starts / 5 starts",
+}
+
 
 def decode(value):
     return np.array([float(item) for item in value.split(";") if item != ""])
@@ -55,6 +82,21 @@ def top_k_jaccard(left, right, k):
 
 def fmt(value):
     return "NA" if not math.isfinite(value) else f"{value:.3f}"
+
+
+def fixture_statistics(dataset):
+    matrix = np.loadtxt(ROOT / "data" / f"{dataset}.csv", delimiter=",")
+    n = matrix.shape[0]
+    edges = int(np.count_nonzero(np.triu(matrix, k=1)))
+    possible_edges = n * (n - 1) / 2
+    return n, edges, edges / possible_edges
+
+
+def ordered_algorithms(rows):
+    present = {row["algorithm"] for row in rows}
+    return [name for name in ALGORITHM_ORDER if name in present] + sorted(
+        present - set(ALGORITHM_ORDER)
+    )
 
 
 def main():
@@ -109,6 +151,55 @@ def main():
             "cpnet fit. Both packages receive sparse matrices and BLAS is pinned "
             "to one thread by the benchmark launcher.\n\n"
         )
+        handle.write("## Timing summary\n\n")
+        handle.write(
+            "The fixtures are deliberately small correctness-and-concordance "
+            "cases, not a scaling study. Their sizes are:\n\n"
+            "| Dataset | Nodes | Undirected edges | Density |\n"
+            "|---|---:|---:|---:|\n"
+        )
+        for dataset in sorted({row["dataset"] for row in rows}):
+            n, edges, density = fixture_statistics(dataset)
+            handle.write(
+                f"| {dataset} | {n} | {edges} | {100 * density:.1f}% |\n"
+            )
+        handle.write(
+            "\nEach timing cell is `CorePeriphery.jl ms / cpnet ms "
+            "(cpnet/Julia ratio)`. A ratio above 1 means the Julia call was "
+            "faster. The fit-budget column is Julia / cpnet and is essential "
+            "context for interpreting the ratio.\n\n"
+            "| Algorithm | Fit budget (Julia / cpnet) | ideal_single | "
+            "noisy_single | two_pairs | Median ratio | Julia faster |\n"
+            "|---|---|---:|---:|---:|---:|---:|\n"
+        )
+        rows_by_key = {
+            (row["algorithm"], row["dataset"]): row for row in rows
+        }
+        datasets = ("ideal_single", "noisy_single", "two_pairs")
+        for algorithm in ordered_algorithms(rows):
+            algorithm_rows = [
+                rows_by_key[(algorithm, dataset)] for dataset in datasets
+            ]
+            ratios = np.array([
+                row["cpnet_ms"] / row["julia_ms"] for row in algorithm_rows
+            ])
+            cells = []
+            for row, ratio in zip(algorithm_rows, ratios):
+                cells.append(
+                    f"{fmt(row['julia_ms'])} / {fmt(row['cpnet_ms'])} "
+                    f"({ratio:.1f}×)"
+                )
+            handle.write(
+                f"| {algorithm} | {FIT_BUDGET[algorithm]} | "
+                + " | ".join(cells)
+                + f" | {np.median(ratios):.1f}× | {int((ratios > 1).sum())}/3 |\n"
+            )
+        handle.write(
+            "\nThe median ratio is the median of the three per-fixture ratios, "
+            "not a ratio of pooled or cross-fixture runtimes. Sub-millisecond "
+            "entries are especially sensitive to host load and timer noise.\n\n"
+        )
+        handle.write("## Recovery and concordance details\n\n")
         handle.write(
             "| Dataset | Algorithm | Spearman | Top-k Jaccard | Julia AUC | "
             "cpnet AUC | Pair ARI | Julia truth ARI | cpnet truth ARI | "
@@ -130,9 +221,10 @@ def main():
             row["cpnet_ms"] / row["julia_ms"] for row in rows
             if row["julia_ms"] > 0 and row["cpnet_ms"] > 0
         ])
+        faster_count = int((speedups > 1).sum())
         handle.write(
             "\n## Aggregate description\n\n"
-            f"CorePeriphery.jl was faster in {(speedups > 1).sum()} of "
+            f"CorePeriphery.jl was faster in {faster_count} of "
             f"{len(speedups)} warmed rows; the median cpnet/Julia runtime ratio "
             f"was {np.median(speedups):.1f}×. This ratio includes each "
             "implementation's configured search procedure: cpnet uses five "
@@ -162,7 +254,8 @@ def main():
             "- Surprise agrees on single-pair graphs but uses different "
             "statistics and search procedures, so raw quality values—including "
             "their signs—must not be compared.\n"
-            "- CorePeriphery.jl is faster in 25 of 27 rows. Only Rombach is "
+            f"- CorePeriphery.jl is faster in {faster_count} of "
+            f"{len(speedups)} rows. Only Rombach is "
             "runtime-competitive here: cpnet is faster on the noisy and "
             "two-pair Rombach fits. The largest "
             "ratios occur for deterministic Julia fits compared with cpnet's "
