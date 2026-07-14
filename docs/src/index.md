@@ -74,6 +74,26 @@ println("Quality: ", result.quality)
 | Statistical significance | [`cp_significance`](@ref) |
 | Configuration null convenience | [`multiple_cp_pairs_config`](@ref) |
 
+## Performance snapshot
+
+CorePeriphery.jl provides matrix-free sparse paths for its principal spectral,
+directed, and greedy algorithms. On the package's synthetic `n = 512` benchmark,
+the following warmed median runtimes were measured with Julia 1.12, one BLAS
+thread, and seven repetitions:
+
+| Algorithm | Dense | Sparse | Sparse speedup |
+|:----------|------:|-------:|---------------:|
+| [`lip_discrete`](@ref) | 0.906 ms | 0.132 ms | 6.8× |
+| [`minres_symmetric`](@ref) (`max_iter = 50`) | 1.565 ms | 0.337 ms | 4.6× |
+| [`spectral_method`](@ref) | 39.754 ms | 4.215 ms | 9.4× |
+| [`random_walker_profiling`](@ref) | 18.480 ms | 0.832 ms | 22.2× |
+| [`minres_svd_directed`](@ref) (`max_iter = 50`) | 7.096 ms | 0.675 ms | 10.5× |
+
+Absolute timings are host-specific. These results are intended to show the effect
+of sparse storage on the benchmark fixture, not to predict runtime for every
+network. See [Performance](@ref) for workload details, allocation measurements,
+Julia 1.10 results, and reproduction instructions.
+
 ## Documentation
 
 ```@contents
