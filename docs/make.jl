@@ -5,7 +5,7 @@ makedocs(;
     modules=[CorePeriphery],
     checkdocs=:exports,
     authors="Simone Santoni",
-    repo="https://github.com/simoneSantoni/CorePeriphery.jl/blob/{commit}{path}#{line}",
+    repo=Documenter.Remotes.GitHub("simoneSantoni", "CorePeriphery.jl"),
     sitename="CorePeriphery.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",

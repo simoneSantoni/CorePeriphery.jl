@@ -2,127 +2,124 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Project overview
 
-CorePeriphery.jl is a Julia package implementing algorithms for detecting core-periphery structure in networks. Core-periphery structure is a mesoscale pattern where nodes partition into a densely interconnected core and a sparsely connected periphery that attaches to the core but not to each other.
+CorePeriphery.jl is a Julia package (v0.2.0, Julia ≥ 1.10) implementing ten published
+core-periphery detection algorithms plus Monte Carlo significance testing. The package's
+defining concern is **scientific fidelity to the source papers**: each algorithm has a
+documented contract (input requirements, estimand, quality definition) and an oracle test
+suite. The reference PDFs/HTML live in `algo/`.
 
-## Common Commands
+Julia 1.10 is the compatibility floor; Julia 1.12 is the primary optimization and
+regression-gate runtime. Both are installed via juliaup (`julia +1.10`, `julia +1.12`).
 
-### Running Tests
+## Commands
 
-```bash
+The project has no committed Manifest (gitignored). On a fresh checkout run
+`julia --project=. -e 'using Pkg; Pkg.instantiate()'` first, otherwise loading fails on
+the missing Arpack dependency.
+
+```sh
+# Full test suite (~1,500 checks; also pulls in Graphs for the extension tests)
 julia --project=. -e 'using Pkg; Pkg.test()'
-```
 
-### Running a Single Testset
+# Single test file: every file under test/ except performance_kernels.jl is
+# self-contained (own `using` lines) and can be run directly
+julia --project=. test/significance.jl
+# test/performance_kernels.jl relies on names loaded by runtests.jl (Statistics, etc.)
+# test/graphs_extension.jl needs Graphs.jl available in the environment
 
-No built-in filter; activate the project and run specific testsets interactively:
+# Strict docs build (Documenter 1: checkdocs=:exports, doctests on, warnings fatal).
+# .github/workflows/Documentation.yml runs this on Julia 1.12 and deploys to the
+# gh-pages branch on pushes to main and on tags (dev/ and stable/ URLs).
+julia --project=docs docs/make.jl
 
-```julia
-julia --project=. -e '
-using CorePeriphery, Test, LinearAlgebra, Statistics, Random
-# paste or include the @testset block you want to run
-'
-```
+# Dependency-free scaling + allocation regression gate (thresholds in benchmark/regression_targets.jl)
+julia --threads=2 --project=. benchmark/scaling.jl --quick --check
 
-Or load the full test file in the REPL and comment out unwanted testsets.
+# Julia 1.10/1.12 versioned performance snapshot (writes TSV + Markdown in benchmark/)
+benchmark/run_versioned_performance.sh [out.tsv out.md] [--quick]
 
-### Running Examples
-
-```bash
+# Example script
 julia --project=. examples/basic_usage.jl
 ```
 
-### Building Documentation
+Pre-release checks recorded in `docs/src/development.md` also include `git diff --check`.
 
-```bash
-julia --project=docs docs/make.jl
-```
-
-### Interactive Development
-
-```julia
-julia --project=.
-# then:
-using CorePeriphery
-```
-
-## CI
-
-GitHub Actions ([.github/workflows/CI.yml](.github/workflows/CI.yml)) runs tests on Julia 1.10, Julia 1.12, and nightly. Docs are built and deployed to GitHub Pages on pushes to main.
+The cross-package comparison against Python `cpnet` (`benchmark/fit_cpnet.py`,
+`analyze.py`, `diagnose_divergence.py`) needs a manually assembled Python env pinned to
+NumPy 1.x and a specific cpnet commit; see `benchmark/README.md`. It is not part of
+`Pkg.test()`.
 
 ## Architecture
 
-The main module is [src/CorePeriphery.jl](src/CorePeriphery.jl), with focused
-implementations in `src/spectral.jl`, `src/multipair.jl`, `src/directed.jl`,
-and `src/significance.jl`. Core dependencies are Julia standard libraries;
-Graphs.jl integration is provided through an optional package extension. The
-`algo/` directory contains reference papers.
+### Module layout
 
-### Result Types
+`src/CorePeriphery.jl` is the main module (~1,900 lines). It declares all exports, the
+`CPResult` / `CPMultiResult` / `StationaryDistributionResult` / `RossaEnsembleResult`
+structs, shared validation and kernels, and the Borgatti–Everett, Lip, Rombach, Della
+Rossa, Surprise, and label-switching algorithms. Near the end it `include`s four files
+and then defines thin public wrappers around them:
 
-**`CPResult`** - Standard result returned by most algorithms:
+| File | Contents | Public entry points |
+|---|---|---|
+| `src/spectral.jl` | Cucuringu LowRank-Core rank-two reconstruction + Find-Cut (`_lowrank_core`); sparse path uses two ARPACK eigenpairs | `spectral_method` |
+| `src/multipair.jl` | Kojaku–Masuda joint pair/role label switching with ER and configuration null contexts (`_multiple_cp_pairs_joint`) | `multiple_cp_pairs`, `multiple_cp_pairs_config` |
+| `src/directed.jl` | `CPDirectedResult`; symmetric `ww'` and directed `uv'` MINRES rank-one estimators | `minres_symmetric`, `minres_svd_directed` (`minres_svd` is a `CPResult` compatibility projection) |
+| `src/significance.jl` | `CPSignificanceResult`; ER, degree-configuration, directed in/out configuration, and weight-permutation null samplers; deterministic threaded sampling | `cp_significance` |
 
-- `coreness::Vector{Float64}` - Coreness score for each node (normalized to [0,1])
-- `core_nodes::Vector{Int}` - Indices of nodes classified as core
-- `periphery_nodes::Vector{Int}` - Indices of nodes classified as periphery
-- `quality::Float64` - Quality score (Pearson correlation with ideal pattern)
-- `algorithm::String` - Name of the algorithm used
+`ext/CorePeripheryGraphsExt.jl` is a weak-dependency package extension: it defines
+`adjacency_to_matrix(::AbstractGraph)` (sparse Float64) and metaprograms one method per
+detector that converts a Graphs.jl graph and forwards. Graphs.jl is never a hard
+dependency; the detector list in the extension must be kept in sync when adding a
+public detector.
 
-**`CPMultiResult`** - For multiple core-periphery pairs detection:
+### Cross-cutting conventions
 
-- `pair_labels::Vector{Int}` - Pair assignment for each node (1, 2, ..., K)
-- `coreness::Vector{Float64}` - Binary coreness within each pair
-- `n_pairs::Int` - Number of detected core-periphery pairs
-- `quality::Float64` - Q^cp quality score
-- `algorithm::String` - Name of the algorithm used
+- **Dense/sparse dual dispatch.** Many internal kernels have a generic
+  `AbstractMatrix{<:Real}` method and a specialised `SparseMatrixCSC` method
+  (`_validate_adjacency`, `_adjacency_pattern_product`, `_links_to_periphery`,
+  `_positive_reachable`, `_edge_list`, `_joint_build_graph`, `_lowrank_eigenpairs`, ...).
+  Tests assert dense and sparse paths give identical results; preserve that when touching
+  either.
+- **Centralised input validation.** `_validate_adjacency` enforces square, finite,
+  nonnegative, loop-free, and optionally symmetric/binary input. Method-specific
+  requirements (Lip, LowRank-Core, Surprise, and configuration-null significance require
+  simple binary graphs; Rossa requires connected / strongly connected) are enforced there
+  rather than silently reinterpreted.
+- **Quality is algorithm-specific**, evaluated on the returned state, and documented per
+  algorithm in `docs/src/contracts.md`. Do not assume it is a Pearson correlation. That
+  page is also the source of truth for which detectors accept directed, weighted, or
+  sparse input ("Directionality guide") and for every result container's field semantics.
+- **Coreness normalisation and thresholds.** Continuous scores are passed through
+  `_normalize_scores` to [0,1]; core/periphery split defaults to the median unless the
+  algorithm defines its own partition.
+- **Reproducibility.** Stochastic algorithms take an explicit `rng` keyword. Rossa's
+  `tie_break=:deterministic` (lower node index) is the default; `tie_break=:paper`
+  reproduces the paper's stochastic rule and needs an explicit RNG. Threaded significance
+  uses deterministic child RNG streams so serial and threaded runs agree.
+- **Legacy keywords.** Rossa `n_walks` / `walk_length` are accepted but ignored
+  (profiling is analytic). `minres_svd` exists only for 0.1 compatibility.
+- **Configuration-null shortfall policy.** `cp_significance` errors when requested
+  edge switching does not complete unless `swap_shortfall=:warn` or `:accept` is passed.
 
-### Algorithms (10 total)
+### Tests
 
-All algorithms accept an adjacency matrix `A::Matrix{Float64}`. Line ranges are for [src/CorePeriphery.jl](src/CorePeriphery.jl):
+`test/runtests.jl` holds the basic per-algorithm testset and then includes the
+specialised files. The scientifically important ones: `scientific_validation.jl`
+(exhaustive/direct oracles, ~1,000 checks), `scientific_contracts.jl`,
+`spectral_lowrank.jl`, `multipair_joint.jl`, `directed_minres.jl`, `significance.jl`,
+`performance_kernels.jl` (sparse/dense equivalence), `graphs_extension.jl`.
 
-| Algorithm | Function | Type | Lines |
-|-----------|----------|------|-------|
-| Borgatti-Everett Continuous | `borgatti_everett_continuous(A)` | Continuous | 200-272 |
-| Borgatti-Everett Discrete | `borgatti_everett_discrete(A)` | Discrete | 273-336 |
-| Lip's Fast Discrete | `lip_discrete(A)` | Discrete | 337-442 |
-| Rombach Generalized | `rombach_continuous(A)` | Continuous | 443-564 |
-| LowRank-Core/Find-Cut | `spectral_method(A)` | Discrete partition + scores | `src/spectral.jl` |
-| Random Walker Profiling | `random_walker_profiling(A)` | Continuous persistence | main module |
-| MINRES/SVD | `minres_svd_directed(A)` | Directed continuous | `src/directed.jl` |
-| Multiple CP Pairs | `multiple_cp_pairs(A)` | Joint multi-pair | `src/multipair.jl` |
-| Surprise-Based | `surprise_cp(A)` | Discrete | 962-1082 |
-| Label Switching | `label_switching_cp(A)` | Discrete | 1083-1198 |
+A change to an algorithm's objective or move rule must be checked against the paper in
+`algo/` and the corresponding oracle test, and the resulting contract change recorded in
+`docs/src/contracts.md`, `CHANGELOG.md`, and (if user-visible) `docs/src/migration.md`.
 
-**Algorithm Selection Guide:**
+### Documentation and benchmark records
 
-- **Fast discrete classification**: `lip_discrete` or `label_switching_cp`
-- **Continuous coreness scores**: `borgatti_everett_continuous` or `spectral_method`
-- **Directed/asymmetric networks**: `minres_svd_directed`
-- **Multiple CP structures**: `multiple_cp_pairs`
-- **Tunable core boundary**: `rombach_continuous` (use `alpha` for sharpness, `beta` for core size)
-
-### Utility Functions
-
-- `adjacency_to_matrix(edges, n)` - Convert edge list (tuples) to symmetric adjacency matrix; supports weighted edges as `(i, j, weight)` tuples
-- `ideal_cp_matrix(c; discrete=false)` - Generate ideal CP pattern: continuous uses `c[i]*c[j]`, discrete uses `max(c[i], c[j])`
-- `core_quality(A, c; discrete=false)` - Compute Pearson correlation between adjacency and ideal pattern
-- `coreness_scores(result)` - Extract coreness vector from CPResult
-
-## Key Implementation Details
-
-- Algorithms accept real abstract matrices; method-specific validation governs symmetry, binary/weighted input, and connectivity.
-- Graphs.jl inputs are supported through an optional extension on all supported Julia versions.
-- Coreness scores are normalized to [0,1] range after optimization
-- Core/periphery classification uses median coreness as threshold
-- Weighted support is method-specific; Lip, LowRank-Core, Surprise, and significance null sampling require binary graphs.
-- Algorithms use coordinate ascent, greedy swaps, or spectral decomposition depending on the method
-
-## Testing
-
-Tests in [test/runtests.jl](test/runtests.jl) cover:
-
-- Utility functions (matrix conversion, ideal patterns)
-- All 10 algorithms with synthetic CP networks
-- Edge cases (empty networks, single nodes, complete graphs)
-- Consistency checks across algorithm runs
+`docs/src/` is a Documenter site (index, tutorial, algorithms, contracts, performance,
+development, migration, api). `docs/src/development.md` is the audit/refactor record and
+lists the release-roadmap issues. `benchmark/*.md` (COMPARISON, DIVERGENCE, ABLATION,
+OPTIMIZATION, VALIDATION, VERSIONED_PERFORMANCE) are generated or hand-maintained
+evidence reports; the TSV files beside them are their machine-readable sources and are
+regenerated by the scripts named in `benchmark/README.md`.
