@@ -1,0 +1,6 @@
+cpnet 6aad458
+upstream commit 6aad458a6d434a3617d33e74f7163d514a27fecb
+Python 3.12.3
+NumPy 1.26.4
+SciPy 1.14.1
+Numba 0.66.0

@@ -1,0 +1,7 @@
+variant current
+storage dense
+CorePeriphery.jl 0.2.0
+Julia 1.12.4
+Julia threads 1
+BLAS threads 1
+active project /home/simon/githubRepos/CorePeriphery.jl/Project.toml
