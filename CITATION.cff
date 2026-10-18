@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use CorePeriphery.jl in your research, please cite it as below."
+type: software
+title: "CorePeriphery.jl: Core-Periphery Detection in Julia"
+abstract: >-
+  A Julia package implementing published algorithms for detecting core-periphery
+  structure in networks, with documented per-detector contracts and Monte Carlo
+  significance testing.
+authors:
+  - family-names: Santoni
+    given-names: Simone
+version: 0.2.0
+repository-code: "https://github.com/simoneSantoni/CorePeriphery.jl"
+url: "https://simoneSantoni.github.io/CorePeriphery.jl/dev/"
+license: MIT
+keywords:
+  - core-periphery
+  - network analysis
+  - network science
+  - Julia

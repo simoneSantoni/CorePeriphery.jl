@@ -15,8 +15,9 @@ source_revision="$(git rev-parse HEAD)"
 if [[ -n "$(git status --porcelain)" ]]; then
     source_revision="${source_revision}+working-tree"
 fi
-printf 'julia_version\tsource_revision\tthreads\tblas_threads\tcpu\trepetitions\tbenchmark\tn\tstorage\tmedian_ms\tminimum_ms\tmaximum_ms\tbytes\n' > "${output_tsv}"
-for channel in 1.10 1.12; do
+# Column order follows benchmark/scaling.jl: minimum, median, maximum.
+printf 'julia_version\tsource_revision\tthreads\tblas_threads\tcpu\trepetitions\tbenchmark\tn\tstorage\tminimum_ms\tmedian_ms\tmaximum_ms\tbytes\n' > "${output_tsv}"
+for channel in 1.10 1.12 1.13.2; do
     raw="${temporary_directory}/julia-${channel}.tsv"
     benchmark_arguments=(--check)
     if [[ "${mode}" == "--quick" ]]; then

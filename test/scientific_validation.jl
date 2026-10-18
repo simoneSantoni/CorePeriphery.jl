@@ -1,5 +1,6 @@
 using CorePeriphery
 using LinearAlgebra
+using Logging
 using Random
 using Test
 
@@ -53,6 +54,9 @@ end
     @testset "Exhaustive Lip loss on all five-node graphs" begin
         n = 5
         dyads = [(i, j) for i in 1:(n - 1) for j in (i + 1):n]
+        # Most enumerated graphs are disconnected; the one-time warning is
+        # legitimate and not under test here.
+        Logging.with_logger(Logging.NullLogger()) do
         for graph_mask in 0:(2^length(dyads) - 1)
             A = zeros(Int, n, n)
             for (bit, (source, target)) in enumerate(dyads)
@@ -73,6 +77,7 @@ end
                 for mask in 1:(2^n - 2)
             )
             @test attained == optimum
+        end
         end
     end
 

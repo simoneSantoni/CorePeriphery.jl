@@ -15,7 +15,7 @@ mathematical quantities under the same algorithm name.
 | Algorithm | Observed rank concordance | Dominant causes | Causal evidence |
 |---|---:|---|---|
 | MINRES | 0.320 | cpnet selects the largest residual; its scorer is inconsistent with its gradient; loose stopping; symmetric `ww'` versus Julia `uv'` | Correct selection raises mean rank concordance to 0.595; correct selection plus tight convergence raises it to 0.918 |
-| KM-configuration | 0.652 | Missing node-degree factor in cpnet's move gain; different initialization and pair constraints; diagonal-null convention | Cross-evaluation exposes poor local states and pair counts ranging from one to seven |
+| KM-configuration | 0.652 | Missing node-degree factor in cpnet's move gain; different initialization and pair constraints; at audit time, the package's own omission of the eq. (13) diagonal null term (since corrected) | Cross-evaluation exposes poor local states and pair counts ranging from one to seven |
 | KM-ER | 0.658 | Different initialization, feasible pair counts, and local basins; cpnet uses inconsistent densities in optimization and scoring | Both objective evaluators often prefer the same state, while the returned pair counts differ sharply |
 | Rombach | 0.837 in the main comparison | cpnet's loop exits after its first improving sweep; fixed initial ordering; shifted template indexing | Completing best-swap search recovers Julia's ordering exactly on the noisy and two-pair graphs |
 | LowRank-Core | 0.743 | Julia exposes reconstruction scores; cpnet exposes a binary Find-Cut result; unstable ordering of tied integer scores | Latent reconstruction rankings agree exactly on all three graphs |
@@ -67,8 +67,9 @@ binary role for each node, but their state spaces and searches differ:
   objective ordering agrees.
 
 For KM-ER, cpnet optimizes with density `m / choose(n,2)` but scores restarts with
-`2m/n²`. Its aggregate score also includes a self-null convention absent from Julia's
-strict off-diagonal simple-graph objective.
+`2m/n²`. Its aggregate score also includes a self-null term that Kojaku & Masuda
+(2017) eq. (3), a strictly lower-triangular sum, does not contain; Julia follows eq.
+(3).
 
 For KM-configuration, cpnet's move gain subtracts
 
@@ -77,8 +78,21 @@ For KM-configuration, cpnet's move gain subtracts
 without multiplying by the moving node's degree. The required degree factor appears
 in an older commented formula in the same file, but not in the executed code. cpnet
 therefore searches using a different expression from the one used to score its final
-state. Julia's move gain uses `degree[node] * degree_sum / (2m)` and excludes diagonal
-dyads consistently.
+state. Julia's move gain uses `degree[node] * degree_sum / (2m)`.
+
+**Correction (October 2026).** At the time of this audit CorePeriphery.jl's
+configuration objective excluded the `i = j` dyads, and this report attributed the
+resulting "diagonal-null convention" difference to cpnet. That was wrong: Kojaku &
+Masuda (2018) eq. (13) sums over all `(i, j)` including `i = j`, and with a zero
+diagonal the null term `-d_i^2 / (2M)` survives for every core node. cpnet's scorer
+includes that term; the package omitted it (a shortfall of
+`sum(d_i^2 for i in core) / (4M^2)`, about 17% of the objective on a 30-node planted
+test). The package now implements eq. (13) exactly, including the term in
+`_joint_expected` and in every move delta, and matches cpnet's scoring convention on
+this point. The KM-configuration cross-evaluation below was computed with the
+pre-correction Julia objective, so its "Julia objective" column for KM-config is the
+former, diagonal-free quantity; the ranking of states it reports has not been
+re-run.
 
 The following table cross-evaluates the Julia (J) and cpnet (P) fitted states. Values
 are only comparable within one objective column.
@@ -202,7 +216,8 @@ The low-concordance cases do not share one cause:
 
 1. **MINRES:** mostly correctable cpnet run-selection, scoring, and stopping defects.
 2. **KM:** different search spaces and initialization, plus a substantive
-   configuration-gain defect and null-model conventions.
+   configuration-gain defect in cpnet; the eq. (13) diagonal-term difference recorded
+   at audit time was the package's own omission and has been corrected.
 3. **Rombach:** premature cpnet termination and initialization strategy.
 4. **LowRank-Core:** primarily different exposed outputs and tied-cut ordering.
 5. **Rossa:** deterministic specialization in Julia versus a different selection

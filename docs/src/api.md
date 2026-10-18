@@ -13,8 +13,20 @@ CPResult
 CPMultiResult
 CPDirectedResult
 CPSignificanceResult
+CorePeriphery.NullDiagnostics
 StationaryDistributionResult
 RossaEnsembleResult
+```
+
+Every result type defines structural `==`, `isequal`, and `hash`, so results
+can be compared, deduplicated, and used as `Dict`/`Set` keys. `==` follows the
+field semantics (a `NaN` quality or z-score is not `==` to itself); use
+`isequal` to compare results that may carry `NaN` fields.
+
+## Exceptions
+
+```@docs
+ConvergenceError
 ```
 
 ## Detection Algorithms
@@ -24,6 +36,7 @@ RossaEnsembleResult
 ```@docs
 borgatti_everett_continuous
 rombach_continuous
+rombach_core_score
 spectral_method
 random_walker_profiling
 rossa_stationary_distribution
@@ -53,6 +66,7 @@ multiple_cp_pairs_config
 
 ```@docs
 adjacency_to_matrix
+block_densities
 ideal_cp_matrix
 core_quality
 coreness_scores

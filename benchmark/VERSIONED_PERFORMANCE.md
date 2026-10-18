@@ -6,6 +6,14 @@ Allocation counts and scaling are the hardware-independent CI guardrails.
 
 ## Environment
 
+Historical snapshot: the recorded source revision
+`a2226832508c57efdeab71cde1f055549ca028e7+working-tree` is a pre-refactor development
+commit that is not part of this repository's published history, and the `+working-tree`
+suffix means the measurements were taken on an uncommitted tree. The numbers are
+retained for reference and are not reproducible from this history; regenerate the
+snapshot with `benchmark/run_versioned_performance.sh` on a tagged commit before citing
+it (that script overwrites this file).
+
 | Julia | Source revision | Threads | BLAS | CPU | Repetitions |
 |---|---|---:|---:|---|---:|
 | 1.10 | `a2226832508c57efdeab71cde1f055549ca028e7+working-tree` | 2 | 1 | goldmont | 7 |

@@ -1,4 +1,5 @@
 using CorePeriphery
+using Logging
 using Random
 using Test
 
@@ -43,18 +44,26 @@ using Test
             end
         end
 
-        capped = multiple_cp_pairs(A; max_pairs=2, min_pair_size=1, max_iter=0)
+        # The two planted pairs form two components, so the first call emits
+        # the one-time disconnected-input warning; the remaining calls on the
+        # same fixture run under a null logger.
+        capped = @test_logs (:warn, r"connected components with at least two nodes") match_mode=:any multiple_cp_pairs(
+            A; max_pairs=2, min_pair_size=1, max_iter=0, rng=MersenneTwister(1))
         @test capped.n_pairs <= 2
         @test sort(unique(capped.pair_labels)) == collect(1:capped.n_pairs)
 
-        sized = multiple_cp_pairs(A; max_pairs=4, min_pair_size=3, max_iter=0)
-        @test sized.n_pairs <= 4
-        @test all(count(==(pair), sized.pair_labels) >= 3 for pair in 1:sized.n_pairs)
+        Logging.with_logger(Logging.NullLogger()) do
+            sized = multiple_cp_pairs(
+                A; max_pairs=4, min_pair_size=3, max_iter=0, rng=MersenneTwister(2))
+            @test sized.n_pairs <= 4
+            @test all(count(==(pair), sized.pair_labels) >= 3 for pair in 1:sized.n_pairs)
 
-        @test_throws ArgumentError multiple_cp_pairs(A; max_pairs=0)
-        @test multiple_cp_pairs(A; max_pairs=9, min_pair_size=1).n_pairs <= 8
-        @test_throws ArgumentError multiple_cp_pairs(A; min_pair_size=0)
-        @test_throws ArgumentError multiple_cp_pairs(A; min_pair_size=9)
-        @test_throws ArgumentError multiple_cp_pairs(A; max_iter=-1)
+            @test_throws ArgumentError multiple_cp_pairs(A; max_pairs=0)
+            @test multiple_cp_pairs(
+                A; max_pairs=9, min_pair_size=1, rng=MersenneTwister(3)).n_pairs <= 8
+            @test_throws ArgumentError multiple_cp_pairs(A; min_pair_size=0)
+            @test_throws ArgumentError multiple_cp_pairs(A; min_pair_size=9)
+            @test_throws ArgumentError multiple_cp_pairs(A; max_iter=-1)
+        end
     end
 end

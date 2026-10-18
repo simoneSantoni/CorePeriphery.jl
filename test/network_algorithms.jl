@@ -32,6 +32,8 @@ using Test
     weighted[1, 2] = weighted[2, 1] = 0.5
     @test_throws ArgumentError lip_discrete(weighted)
     @test_throws DimensionMismatch lip_discrete(A[1:4, :])
+    @test (@test_deprecated lip_discrete(star; max_iter=10)).core_nodes == [1]
+    @test_throws ArgumentError lip_discrete(star; max_iter=-1)
 end
 
 @testset "Della Rossa persistence profile" begin
@@ -131,10 +133,23 @@ end
     @test_throws ArgumentError rossa_profile_ensemble(
         complete; memory_limit_bytes=-1,
     )
+    # The ensemble always profiles with tie_break=:paper; overriding it through
+    # the keyword splat is rejected instead of silently winning.
+    @test_throws ArgumentError rossa_profile_ensemble(
+        complete; n_runs=5, tie_break=:deterministic,
+    )
+    @test_throws ArgumentError rossa_profile_ensemble(
+        complete; n_runs=5, tie_break=:paper,
+    )
 
-    # Compatibility simulation keywords no longer affect this deterministic method.
-    @test random_walker_profiling(star; n_walks=1, walk_length=1).coreness ==
-          random_walker_profiling(star; n_walks=10_000, walk_length=100).coreness
+    # Compatibility simulation keywords no longer affect this deterministic method;
+    # passing them is deprecated.
+    @test (@test_deprecated random_walker_profiling(star; n_walks=1, walk_length=1)).coreness ==
+          (@test_deprecated random_walker_profiling(star; n_walks=10_000, walk_length=100)).coreness
+    @test (@test_deprecated random_walker_profiling(star; n_walks=1)).coreness ==
+          random_walker_profiling(star).coreness
+    @test_throws ArgumentError random_walker_profiling(star; n_walks=-1)
+    @test_throws ArgumentError random_walker_profiling(star; walk_length=-1)
 
     disconnected = adjacency_to_matrix([(1, 2), (3, 4)], 4)
     @test_throws ArgumentError random_walker_profiling(disconnected)
@@ -194,7 +209,7 @@ end
     @test_throws ArgumentError random_walker_profiling(star; tie_break=:unknown)
     @test_throws ArgumentError random_walker_profiling(star; stationary_tol=-1)
     @test_throws ArgumentError random_walker_profiling(star; stationary_max_iter=0)
-    @test_throws ErrorException random_walker_profiling(
+    @test_throws ConvergenceError random_walker_profiling(
         directed; stationary_tol=0, stationary_max_iter=1,
     )
     @test_throws ArgumentError random_walker_profiling(
@@ -220,9 +235,17 @@ end
         0.0 0.0 0.0 2.0
         epsilon 0.0 2.0 0.0
     ]
-    @test_throws ErrorException rossa_stationary_distribution(
+    @test_throws ConvergenceError rossa_stationary_distribution(
         slow; method=:lazy, max_iter=2,
     )
+    # ConvergenceError is distinct from the input-validation error types.
+    @test !(ConvergenceError <: ArgumentError)
+    @test occursin("did not converge", try
+        rossa_stationary_distribution(slow; method=:lazy, max_iter=2)
+        ""
+    catch error
+        sprint(showerror, error)
+    end)
     slow_linear = rossa_stationary_distribution(slow; method=:linear)
     @test slow_linear.residual <= 1e-12
 

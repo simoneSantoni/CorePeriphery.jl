@@ -13,13 +13,17 @@ using Test
         @test result.quality >= initial_quality
         @test result.quality == core_quality(A, result.coreness)
 
+        # An edgeless network consists of isolates, which are peripheral by
+        # definition: coreness 0, empty core, zero (degenerate) correlation.
         empty_result = borgatti_everett_continuous(zeros(Int, 4, 4))
-        @test empty_result.coreness == fill(0.5, 4)
+        @test empty_result.coreness == zeros(4)
+        @test isempty(empty_result.core_nodes)
         @test empty_result.quality == 0.0
 
         discrete = borgatti_everett_discrete(zeros(Int, 4, 4))
-        @test !isempty(discrete.core_nodes)
-        @test !isempty(discrete.periphery_nodes)
+        @test isempty(discrete.core_nodes)
+        @test discrete.periphery_nodes == collect(1:4)
+        @test discrete.quality == 0.0
     end
 
     @testset "Directed quality uses ordered dyads" begin

@@ -18,6 +18,7 @@ import CorePeriphery:
     random_walker_profiling,
     rossa_profile_ensemble,
     rombach_continuous,
+    rombach_core_score,
     spectral_method,
     surprise_cp
 
@@ -43,6 +44,7 @@ for detector in (
     :random_walker_profiling,
     :rossa_profile_ensemble,
     :rombach_continuous,
+    :rombach_core_score,
     :spectral_method,
     :surprise_cp,
 )

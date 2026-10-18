@@ -1,24 +1,3 @@
-export CPDirectedResult, minres_svd_directed, minres_symmetric
-
-"""
-    CPDirectedResult
-
-Result of directed core-periphery detection. `out_coreness` describes how
-strongly each node connects outward to core-like receivers, while
-`in_coreness` describes how strongly it receives connections from core-like
-senders. `coreness` is their arithmetic mean.
-"""
-struct CPDirectedResult
-    out_coreness::Vector{Float64}
-    in_coreness::Vector{Float64}
-    coreness::Vector{Float64}
-    core_nodes::Vector{Int}
-    periphery_nodes::Vector{Int}
-    residual::Float64
-    quality::Float64
-    algorithm::String
-end
-
 function _minres_symmetric_factor(A::AbstractMatrix{<:Real}, n::Int,
     max_iter::Int, tolerance::Float64, weight::Float64)
     strengths = Float64.(vec(sum(A, dims=2)))
@@ -44,7 +23,8 @@ function _minres_symmetric_factor(A::AbstractMatrix{<:Real}, n::Int,
 end
 
 """
-    minres_symmetric(A; max_iter=10_000, tol=1e-8, damping=0.5)
+    minres_symmetric(A; max_iter=10_000, tol=1e-8, damping=0.5,
+                     partition=:median, threshold=nothing, core_size=nothing)
 
 Fit the symmetric off-diagonal rank-one MINRES model
 `A[i,j] ≈ w[i]w[j]`. Simultaneous damped fixed-point updates make the estimator
@@ -54,11 +34,25 @@ squared off-diagonal adjacency weight explained by the fitted model.
 
 This is a distinct estimand from `minres_svd_directed`, which fits separate sender
 and receiver factors.
+
+# Keyword arguments
+- `max_iter`, `tol`, `damping`: Fixed-point iteration budget, convergence
+  tolerance, and damping weight in (0, 1]
+- `partition`: Core/periphery split rule applied to the coreness vector:
+  `:median` (default; nodes strictly above the median are core), `:none`
+  (all nodes periphery), `:threshold` (nodes strictly above `threshold`), or
+  `:core_size` (the `core_size` highest-coreness nodes, ties broken by lower index)
+- `threshold`: Cutoff used by `partition=:threshold`
+- `core_size`: Number of core nodes used by `partition=:core_size`
 """
 function minres_symmetric(A::AbstractMatrix{<:Real};
     max_iter::Int=10_000,
     tol::Real=1e-8,
-    damping::Real=0.5)
+    damping::Real=0.5,
+    partition::Symbol=:median,
+    threshold::Union{Nothing,Real}=nothing,
+    core_size::Union{Nothing,Integer}=nothing)
+    A = _unwrap_adjacency(A)
     n = _validate_adjacency(A; symmetric=true)
     n >= 2 || throw(ArgumentError("symmetric MINRES requires at least two nodes"))
     max_iter >= 0 || throw(ArgumentError("max_iter must be nonnegative"))
@@ -67,6 +61,9 @@ function minres_symmetric(A::AbstractMatrix{<:Real};
     isfinite(damping) && 0 < damping <= 1 ||
         throw(ArgumentError("damping must be in (0, 1]"))
 
+    _warn_disconnected(A, :minres_symmetric)
+    isolates = _isolates(A)
+
     factor, product = _minres_symmetric_factor(
         A, n, max_iter, Float64(tol), Float64(damping),
     )
@@ -74,9 +71,11 @@ function minres_symmetric(A::AbstractMatrix{<:Real};
     baseline = Float64(sum(abs2, A))
     quality = iszero(baseline) ? 1.0 : clamp(1.0 - residual / baseline, 0.0, 1.0)
     coreness = _normalize_scores(factor)
-    threshold = median(coreness)
-    core_nodes = findall(coreness .>= threshold)
-    periphery_nodes = findall(coreness .< threshold)
+    coreness[isolates] .= 0.0
+    core_nodes, periphery_nodes = _partition(
+        coreness; rule=partition, threshold=threshold, core_size=core_size)
+    core_nodes, periphery_nodes = _enforce_isolates!(
+        coreness, core_nodes, periphery_nodes, isolates)
     return CPResult(
         coreness,
         core_nodes,
@@ -169,7 +168,8 @@ function _directed_residual!(work::Vector{Float64}, A::AbstractMatrix{<:Real},
 end
 
 """
-    minres_svd_directed(A; max_iter=1000, tol=1e-6)
+    minres_svd_directed(A; max_iter=1000, tol=1e-6,
+                        partition=:median, threshold=nothing, core_size=nothing)
 
 Fit the directed rank-one model `A[i,j] ≈ u[i]v[j]` over off-diagonal dyads
 by paired alternating least-squares searches. Matrix-vector products and work
@@ -181,13 +181,27 @@ weight explained by the fit.
 The two possible update orders are transpose-dual and their balanced factors are
 averaged, making the fit equivariant under transposition (which swaps out- and
 in-coreness) and under applying the same node permutation to rows and columns.
+
+# Keyword arguments
+- `max_iter`, `tol`: Alternating least-squares iteration budget and tolerance
+- `partition`: Core/periphery split rule applied to the coreness vector:
+  `:median` (default; nodes strictly above the median are core), `:none`
+  (all nodes periphery), `:threshold` (nodes strictly above `threshold`), or
+  `:core_size` (the `core_size` highest-coreness nodes, ties broken by lower index)
+- `threshold`: Cutoff used by `partition=:threshold`
+- `core_size`: Number of core nodes used by `partition=:core_size`
 """
 function minres_svd_directed(A::AbstractMatrix{<:Real};
     max_iter::Int=1000,
-    tol::Real=1e-6)
+    tol::Real=1e-6,
+    partition::Symbol=:median,
+    threshold::Union{Nothing,Real}=nothing,
+    core_size::Union{Nothing,Integer}=nothing)
+    A = _unwrap_adjacency(A)
     n = _validate_adjacency(A)
     max_iter >= 0 || throw(ArgumentError("max_iter must be nonnegative"))
     isfinite(tol) && tol >= 0 || throw(ArgumentError("tol must be finite and nonnegative"))
+    _warn_disconnected(A, :minres_svd_directed)
 
     # Row and column strengths are transpose-dual, permutation-equivariant
     # initial values. Coupled balancing changes neither their outer product nor
@@ -214,10 +228,14 @@ function minres_svd_directed(A::AbstractMatrix{<:Real};
 
     out_coreness = _normalize_scores(u)
     in_coreness = _normalize_scores(v)
+    isolates = _isolates(A)
+    out_coreness[isolates] .= 0.0
+    in_coreness[isolates] .= 0.0
     coreness = (out_coreness .+ in_coreness) ./ 2
-    threshold = median(coreness)
-    core_nodes = findall(coreness .>= threshold)
-    periphery_nodes = findall(coreness .< threshold)
+    core_nodes, periphery_nodes = _partition(
+        coreness; rule=partition, threshold=threshold, core_size=core_size)
+    core_nodes, periphery_nodes = _enforce_isolates!(
+        coreness, core_nodes, periphery_nodes, isolates)
 
     return CPDirectedResult(
         out_coreness,
@@ -228,5 +246,30 @@ function minres_svd_directed(A::AbstractMatrix{<:Real};
         residual,
         quality,
         "MINRES/SVD Directed",
+    )
+end
+
+"""
+    minres_svd(A; max_iter=1000, tol=1e-6, partition=:median, threshold=nothing,
+               core_size=nothing)
+
+Compatibility projection of `minres_svd_directed` onto `CPResult`. Use
+`minres_svd_directed` to retain distinct out- and in-coreness vectors and the
+least-squares residual. Keywords are forwarded to `minres_svd_directed`.
+"""
+function minres_svd(A::AbstractMatrix{<:Real}; max_iter::Int=1000, tol::Real=1e-6,
+    partition::Symbol=:median,
+    threshold::Union{Nothing,Real}=nothing,
+    core_size::Union{Nothing,Integer}=nothing)
+    directed = minres_svd_directed(
+        A; max_iter=max_iter, tol=tol,
+        partition=partition, threshold=threshold, core_size=core_size,
+    )
+    return CPResult(
+        directed.coreness,
+        directed.core_nodes,
+        directed.periphery_nodes,
+        directed.quality,
+        "MINRES/SVD",
     )
 end

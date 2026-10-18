@@ -59,7 +59,7 @@ publication-quality performance work, run the full size grid on an idle host,
 record Julia/CPU/BLAS/thread settings, and retain the TSV output with the commit
 being measured.
 
-Generate the checked Julia 1.10/1.12 full snapshot and Markdown summary with:
+Generate the checked Julia 1.10/1.12/1.13 full snapshot and Markdown summary with:
 
 ```sh
 benchmark/run_versioned_performance.sh
@@ -82,20 +82,24 @@ The script writes long-form measurements to `divergence_diagnostics.tsv`.
 
 ## Performance-refactor ablation
 
-The ablation separates the committed pre-refactor implementation, the current
-algorithms on dense matrices, and the current sparse paths. From the repository root:
+The ablation separates the pre-refactor (0.1.0) implementation, the current algorithms
+on dense matrices, and the current sparse paths. The pre-refactor leg was measured on a
+development snapshot (`a2226832508c57efdeab71cde1f055549ca028e7`) that predates this
+repository's published history and cannot be checked out from it. That leg is therefore
+not reproducible from this repository; `ablation_pre_refactor.tsv` and
+`ablation_pre_refactor_environment.txt` are retained as historical records. The two
+current legs and the analysis can be regenerated from the repository root:
 
 ```sh
-git worktree add --detach /tmp/CorePeriphery-pre-refactor \
-    a2226832508c57efdeab71cde1f055549ca028e7
-julia --project=/tmp/CorePeriphery-pre-refactor benchmark/fit_ablation.jl \
-    pre_refactor dense benchmark/ablation_pre_refactor.tsv
 julia --project=. benchmark/fit_ablation.jl \
     current dense benchmark/ablation_current_dense.tsv
 julia --project=. benchmark/fit_ablation.jl \
     current sparse benchmark/ablation_current_sparse.tsv
 /path/to/python-with-numpy-and-scipy benchmark/analyze_ablation.py
 ```
+
+`analyze_ablation.py` reads the retained pre-refactor TSV alongside the regenerated
+current legs.
 
 The generated [`ABLATION.md`](ABLATION.md) reports three-way concordance, semantic
 drift, and dense/sparse kernel equivalence. Machine-readable three-way measurements

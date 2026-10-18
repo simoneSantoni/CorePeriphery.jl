@@ -1,8 +1,50 @@
 using CorePeriphery
 using LinearAlgebra
+using Logging
 using Random
 using SparseArrays
+using Statistics
 using Test
+
+# Null samples are random graphs and are frequently disconnected, so the
+# detectors' one-time disconnected-input warning fires on them while a test
+# evaluates null samples. That warning is legitimate but not under test in this
+# file. This logger drops exactly that record (by its `_id`) and forwards every
+# other message to the enclosing logger, so unexpected warnings still surface.
+struct DropDisconnectedLogger <: Logging.AbstractLogger
+    parent::Logging.AbstractLogger
+end
+Logging.min_enabled_level(logger::DropDisconnectedLogger) =
+    Logging.min_enabled_level(logger.parent)
+Logging.catch_exceptions(logger::DropDisconnectedLogger) =
+    Logging.catch_exceptions(logger.parent)
+function Logging.shouldlog(logger::DropDisconnectedLogger, level, _module, group, id)
+    startswith(string(id), "disconnected_input_") && return false
+    return Logging.shouldlog(logger.parent, level, _module, group, id)
+end
+Logging.handle_message(logger::DropDisconnectedLogger, args...; kwargs...) =
+    Logging.handle_message(logger.parent, args...; kwargs...)
+without_disconnected_warnings(f) =
+    Logging.with_logger(f, DropDisconnectedLogger(Logging.current_logger()))
+
+function significance_planted_network(n::Int; seed::Int=20260713)
+    rng = MersenneTwister(seed + n)
+    core_size = max(2, round(Int, 0.15 * n))
+    A = zeros(Float64, n, n)
+    for j in 2:n, i in 1:(j - 1)
+        probability = i <= core_size && j <= core_size ? 0.45 :
+                      (i <= core_size || j <= core_size ? 0.08 : 0.01)
+        rand(rng) < probability && (A[i, j] = A[j, i] = 1.0)
+    end
+    for i in 1:(n - 1)
+        A[i, i + 1] = A[i + 1, i] = 1.0
+    end
+    return A
+end
+
+# Every testset in this file evaluates detectors on random null samples; see
+# `DropDisconnectedLogger` above. The closing `end` is at the bottom of the file.
+without_disconnected_warnings() do
 
 @testset "Core-periphery significance" begin
     A = adjacency_to_matrix(
@@ -31,8 +73,16 @@ using Test
     @test length(first_result.null_qualities) == 12
     @test 1 / 13 <= first_result.pvalue <= 1
     @test first_result.null_model == :configuration
+    @test first_result.null_diagnostics isa CorePeriphery.NullDiagnostics
     @test first_result.null_diagnostics.complete
     @test first_result.null_diagnostics.accepted_swaps == fill(20, 12)
+    @test first_result.null_diagnostics.preserved == :degree_sequence
+    @test hash(first_result) == hash(second_result)
+    @test cp_significance(
+        A, lip_discrete; n_samples=12, rng=MersenneTwister(91), n_swaps=20, alpha=1//20,
+    ) == first_result
+    @test_throws ArgumentError cp_significance(A, lip_discrete; alpha=0)
+    @test_throws ArgumentError cp_significance(A, lip_discrete; alpha=1)
 
     rewired = CorePeriphery._sample_configuration(
         A,
@@ -73,7 +123,7 @@ using Test
             pass_rng=true,
             threaded=true,
         )
-        @test serial == parallel
+        @test isequal(serial, parallel)
 
         static = cp_significance(
             A,
@@ -87,22 +137,21 @@ using Test
             threaded=true,
             thread_schedule=:static,
         )
-        @test serial == static
-        if VERSION >= v"1.12"
-            greedy = cp_significance(
-                A,
-                label_switching_cp;
-                null_model=null_model,
-                n_samples=16,
-                rng=MersenneTwister(404),
-                n_swaps=20,
-                detector_kwargs=(max_iter=3, n_runs=2),
-                pass_rng=true,
-                threaded=true,
-                thread_schedule=:greedy,
-            )
-            @test serial == greedy
-        end
+        @test isequal(serial, static)
+        # The work-queue schedule is available on every supported Julia version.
+        greedy = cp_significance(
+            A,
+            label_switching_cp;
+            null_model=null_model,
+            n_samples=16,
+            rng=MersenneTwister(404),
+            n_swaps=20,
+            detector_kwargs=(max_iter=3, n_runs=2),
+            pass_rng=true,
+            threaded=true,
+            thread_schedule=:greedy,
+        )
+        @test isequal(serial, greedy)
     end
 
     # In-place samplers reset their buffers and therefore reproduce the public
@@ -133,8 +182,11 @@ using Test
     # default rejects a scientifically ineffective null, while explicit
     # acceptance returns complete diagnostics instead of failing silently.
     star = adjacency_to_matrix([(1, node) for node in 2:7], 7)
-    @test_throws ErrorException CorePeriphery._sample_configuration(
+    @test_throws ConvergenceError CorePeriphery._sample_configuration(
         star, MersenneTwister(1); n_swaps=1,
+    )
+    @test_throws ConvergenceError cp_significance(
+        star, lip_discrete; n_samples=2, n_swaps=1, max_swap_attempts=25,
     )
     short = CorePeriphery._sample_configuration(
         star,
@@ -258,7 +310,8 @@ using Test
             detector_kwargs=detector_kwargs,
             threaded=true,
         )
-        @test serial_extended == threaded_extended
+        # `isequal`: degenerate nulls give a NaN z-score, which is not `==` to itself.
+        @test isequal(serial_extended, threaded_extended)
     end
 
     @test_throws ArgumentError cp_significance(A, lip_discrete; n_samples=0)
@@ -266,11 +319,6 @@ using Test
     @test_throws ArgumentError cp_significance(
         A, lip_discrete; thread_schedule=:invalid,
     )
-    if VERSION < v"1.12"
-        @test_throws ArgumentError cp_significance(
-            A, lip_discrete; threaded=true, thread_schedule=:greedy,
-        )
-    end
     @test_throws ArgumentError cp_significance(
         A, lip_discrete; null_model=:configuration, n_swaps=-1,
     )
@@ -295,3 +343,198 @@ using Test
     @test occursin("incompatible with null_model=:directed_configuration",
                    sprint(showerror, incompatible))
 end
+
+@testset "Significance defaults, effect sizes, and messages" begin
+    A = adjacency_to_matrix(
+        [
+            (1, 2), (2, 3), (3, 4), (4, 5), (5, 6),
+            (6, 7), (7, 8), (8, 1), (1, 5), (2, 6),
+        ],
+        8,
+    )
+
+    # Defaults: 999 samples and the child RNG forwarded to detectors that
+    # accept one. `label_switching_cp` with pass_rng (the default) is therefore
+    # reproducible from `rng` alone.
+    default_result = cp_significance(A, lip_discrete; rng=MersenneTwister(5), n_swaps=10)
+    @test length(default_result.null_qualities) == 999
+    @test 1 / 1000 <= default_result.pvalue <= 1
+    repeat_a = cp_significance(
+        A, label_switching_cp; n_samples=20, n_swaps=10, rng=MersenneTwister(77),
+        detector_kwargs=(max_iter=3, n_runs=3),
+    )
+    repeat_b = cp_significance(
+        A, label_switching_cp; n_samples=20, n_swaps=10, rng=MersenneTwister(77),
+        detector_kwargs=(max_iter=3, n_runs=3),
+    )
+    @test isequal(repeat_a, repeat_b)
+
+    # Effect sizes follow the null sample moments.
+    result = cp_significance(A, lip_discrete; n_samples=30, rng=MersenneTwister(9), n_swaps=10)
+    @test result.null_mean ≈ mean(result.null_qualities)
+    @test result.null_std ≈ std(result.null_qualities)
+    @test result.zscore ≈ (result.observed_quality - result.null_mean) / result.null_std
+    @test propertynames(result) == (
+        :observed_quality, :null_qualities, :pvalue, :significant, :alpha,
+        :null_model, :null_diagnostics, :null_mean, :null_std, :zscore,
+    )
+    shown = sprint(show, MIME("text/plain"), result)
+    @test occursin("null mean", shown)
+    @test occursin("z-score", shown)
+    single = cp_significance(A, lip_discrete; n_samples=1, rng=MersenneTwister(9), n_swaps=10)
+    @test isnan(single.null_std)
+    @test isnan(single.zscore)
+    @test single.null_mean == single.null_qualities[1]
+    # A degenerate null (every sample identical) gives a NaN z-score, not ±Inf.
+    star = adjacency_to_matrix([(1, node) for node in 2:7], 7)
+    degenerate = cp_significance(
+        star, lip_discrete; null_model=:configuration, n_samples=3, n_swaps=1,
+        max_swap_attempts=5, swap_shortfall=:accept, rng=MersenneTwister(1),
+    )
+    @test degenerate.null_std == 0.0
+    @test isnan(degenerate.zscore)
+
+    # pass_rng: package detectors without an rng keyword are silently called
+    # without it; foreign detectors warn once.
+    @test_logs min_level = Base.CoreLogging.Warn cp_significance(
+        A, lip_discrete; n_samples=2, n_swaps=5, rng=MersenneTwister(2),
+    )
+    foreign_detector = network -> lip_discrete(network)
+    @test_logs (:warn, r"does not accept an `rng` keyword") match_mode = :any cp_significance(
+        A, foreign_detector; n_samples=2, n_swaps=5, rng=MersenneTwister(2),
+    )
+    @test_logs min_level = Base.CoreLogging.Warn cp_significance(
+        A, network -> lip_discrete(network); n_samples=2, n_swaps=5,
+        rng=MersenneTwister(2), pass_rng=false,
+    )
+
+    # Actionable errors name the null model and the way out.
+    weighted = adjacency_to_matrix([(1, 2, 0.5), (1, 3, 1.5), (2, 3, 2.5)], 3)
+    binary_error = try
+        cp_significance(weighted, lip_discrete; n_samples=2)
+        nothing
+    catch error
+        error
+    end
+    @test binary_error isa ArgumentError
+    @test occursin("null_model=:configuration", sprint(showerror, binary_error))
+    @test occursin(":weight_permutation", sprint(showerror, binary_error))
+    shortfall_error = try
+        cp_significance(star, lip_discrete; n_samples=2, n_swaps=1, max_swap_attempts=25)
+        nothing
+    catch error
+        error
+    end
+    @test shortfall_error isa ConvergenceError
+    @test occursin("null_model=:er", sprint(showerror, shortfall_error))
+    @test occursin("swap_shortfall=:accept", sprint(showerror, shortfall_error))
+    @test occursin("no valid double-edge swap", sprint(showerror, shortfall_error))
+end
+
+@testset "Significance: sparse input uses sparse null samples" begin
+    planted = significance_planted_network(48)
+    sparse_planted = sparse(planted)
+    for (null_model, detector, kwargs) in (
+        (:er, lip_discrete, NamedTuple()),
+        (:configuration, borgatti_everett_discrete, NamedTuple()),
+        (:configuration, label_switching_cp, (max_iter=3, n_runs=2)),
+    )
+        dense_result = cp_significance(
+            planted, detector; null_model=null_model, n_samples=10, n_swaps=50,
+            rng=MersenneTwister(31), detector_kwargs=kwargs,
+        )
+        sparse_result = cp_significance(
+            sparse_planted, detector; null_model=null_model, n_samples=10, n_swaps=50,
+            rng=MersenneTwister(31), detector_kwargs=kwargs,
+        )
+        @test isequal(dense_result, sparse_result)
+        @test dense_result.null_qualities == sparse_result.null_qualities
+        @test dense_result.null_diagnostics == sparse_result.null_diagnostics
+    end
+
+    directed = zeros(Int, 10, 10)
+    for node in 1:10
+        directed[node, mod1(node + 1, 10)] = 1
+        directed[node, mod1(node + 4, 10)] = 1
+    end
+    dense_directed = cp_significance(
+        directed, minres_svd_directed; null_model=:directed_configuration,
+        n_samples=6, n_swaps=20, rng=MersenneTwister(8),
+    )
+    sparse_directed = cp_significance(
+        sparse(directed), minres_svd_directed; null_model=:directed_configuration,
+        n_samples=6, n_swaps=20, rng=MersenneTwister(8),
+    )
+    @test isequal(dense_directed, sparse_directed)
+
+    weighted = adjacency_to_matrix(
+        [(1, 2, 0.5), (1, 3, 1.5), (2, 3, 2.5), (2, 4, 3.5), (3, 5, 4.5), (4, 5, 1.0)],
+        5,
+    )
+    dense_weighted = cp_significance(
+        weighted, borgatti_everett_continuous; null_model=:weight_permutation,
+        n_samples=6, rng=MersenneTwister(90), detector_kwargs=(max_iter=3,),
+    )
+    sparse_weighted = cp_significance(
+        sparse(weighted), borgatti_everett_continuous; null_model=:weight_permutation,
+        n_samples=6, rng=MersenneTwister(90), detector_kwargs=(max_iter=3,),
+    )
+    @test isequal(dense_weighted, sparse_weighted)
+
+    # The sparse samplers produce exactly the dense samples, as valid CSC
+    # matrices with sorted row indices.
+    n = size(planted, 1)
+    base_edges = CorePeriphery._edge_list(sparse_planted)
+    for null_model in (:er, :configuration)
+        spec = CorePeriphery._NullSpec(
+            null_model, sparse_planted, base_edges, Float64[],
+            length(base_edges) / (n * (n - 1) ÷ 2), 50, 5_000, :error, true,
+        )
+        dense_spec = CorePeriphery._NullSpec(
+            null_model, planted, base_edges, Float64[],
+            length(base_edges) / (n * (n - 1) ÷ 2), 50, 5_000, :error, true,
+        )
+        sparse_ws = CorePeriphery._sparse_workspace(n, base_edges, Float64[])
+        dense_ws = CorePeriphery._dense_workspace(n, base_edges, Float64[])
+        for seed in 1:4
+            CorePeriphery._draw_null!(sparse_ws, spec, MersenneTwister(seed))
+            CorePeriphery._draw_null!(dense_ws, dense_spec, MersenneTwister(seed))
+            @test sparse_ws.network isa SparseMatrixCSC{Float64,Int}
+            @test Matrix(sparse_ws.network) == dense_ws.network
+            @test issymmetric(sparse_ws.network)
+            rows = rowvals(sparse_ws.network)
+            @test all(issorted(rows[nzrange(sparse_ws.network, column)])
+                      for column in 1:n)
+            @test nnz(sparse_ws.network) == count(!iszero, dense_ws.network)
+        end
+    end
+end
+
+@testset "Significance: schedules are bit-for-bit identical" begin
+    # Regression test for the 0.2.0 greedy race: repeated threaded runs must
+    # reproduce the serial result exactly for every null model and schedule.
+    planted = significance_planted_network(40; seed=991)
+    inputs = (planted, sparse(planted))
+    for (null_model, detector, kwargs) in (
+        (:er, lip_discrete, NamedTuple()),
+        (:configuration, lip_discrete, NamedTuple()),
+        (:configuration, label_switching_cp, (max_iter=3, n_runs=2)),
+    ), network in inputs
+        serial = cp_significance(
+            network, detector; null_model=null_model, n_samples=12, n_swaps=60,
+            rng=MersenneTwister(919), detector_kwargs=kwargs, threaded=false,
+        )
+        mismatches = 0
+        for repetition in 1:25, schedule in (:static, :greedy, :auto)
+            threaded = cp_significance(
+                network, detector; null_model=null_model, n_samples=12, n_swaps=60,
+                rng=MersenneTwister(919), detector_kwargs=kwargs, threaded=true,
+                thread_schedule=schedule,
+            )
+            isequal(threaded, serial) || (mismatches += 1)
+        end
+        @test mismatches == 0
+    end
+end
+
+end # without_disconnected_warnings

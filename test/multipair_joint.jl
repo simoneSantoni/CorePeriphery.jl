@@ -1,8 +1,12 @@
 using CorePeriphery
+using Logging
 using Random
 using SparseArrays
 using Test
 
+# Two planted pairs with no ties between them: the public detector emits its
+# one-time disconnected-input warning on this fixture, so public calls on it
+# run under a null logger (the internal engine does not warn).
 function planted_pair_graph()
     A = zeros(8, 8)
     for offset in (0, 4)
@@ -13,6 +17,51 @@ function planted_pair_graph()
         A[offset + 1, offset + 2] = A[offset + 2, offset + 1] = 2.0
     end
     return A
+end
+
+# Brute-force transcriptions of the published objectives, evaluated over every
+# (i, j) pair exactly as written in the papers. The package only keeps cached
+# sufficient-statistic versions; these oracles exist to check them.
+#
+# Kojaku & Masuda (2017) eq. (3), Erdős-Rényi null, strictly lower-triangular
+# sum (i = j never enters); the package divides it by M.
+function km2017_eq3(A, labels, core)
+    n = size(A, 1)
+    M = sum(A) / 2
+    p = M / (n * (n - 1) / 2)
+    total = 0.0
+    for i in 1:n, j in 1:(i - 1)
+        total += (A[i, j] - p) * (core[i] + core[j] - core[i] * core[j]) *
+                 (labels[i] == labels[j])
+    end
+    return total / M
+end
+
+# Kojaku & Masuda (2018) eq. (13), configuration null, full double sum over
+# i, j = 1..N *including* i = j, with its own 1 / (2M) normalisation. The
+# diagonal term -d_i^2 / (2M) survives for every core node because A_ii = 0.
+function km2018_eq13(A, labels, core)
+    n = size(A, 1)
+    d = vec(sum(A, dims=2))
+    M = sum(A) / 2
+    total = 0.0
+    for i in 1:n, j in 1:n
+        total += (A[i, j] - d[i] * d[j] / (2M)) *
+                 (core[i] + core[j] - core[i] * core[j]) * (labels[i] == labels[j])
+    end
+    return total / (2M)
+end
+
+published_objective(null_model, A, labels, core) =
+    null_model === :er ? km2017_eq3(A, labels, core) : km2018_eq13(A, labels, core)
+
+function brute_joint_move_delta(null_model, A, node, new_pair, new_core, labels, core)
+    moved_labels = copy(labels)
+    moved_core = copy(core)
+    moved_labels[node] = new_pair
+    moved_core[node] = new_core
+    return published_objective(null_model, A, moved_labels, moved_core) -
+           published_objective(null_model, A, labels, core)
 end
 
 @testset "Cached joint objective and move deltas" begin
@@ -34,16 +83,11 @@ end
                 normalization, 1.0 / (2.0 * graph.total_weight), graph.degrees,
             )
         end
-        residual(i, j) = begin
-            expected = null_model === :er ? density :
-                graph.degrees[i] * graph.degrees[j] / (2.0 * graph.total_weight)
-            (A[min(i, j), max(i, j)] - expected) / normalization
-        end
 
         cached_quality = CorePeriphery._joint_objective(
             graph, labels, core, context, aggregates,
         )
-        brute_quality = CorePeriphery._joint_objective(labels, core, residual)
+        brute_quality = published_objective(null_model, A, labels, core)
         @test cached_quality ≈ brute_quality atol=1e-14
 
         for node in eachindex(labels)
@@ -67,8 +111,8 @@ end
                     context, node, new_pair, new_core, old_pair, old_core,
                     aggregates, observed_pair, observed_core,
                 ) - old_contribution
-                brute_delta = CorePeriphery._joint_move_delta(
-                    node, new_pair, new_core, labels, core, residual,
+                brute_delta = brute_joint_move_delta(
+                    null_model, A, node, new_pair, new_core, labels, core,
                 )
                 @test cached_delta ≈ brute_delta atol=1e-14
             end
@@ -140,6 +184,76 @@ end
     @test configuration.null_model == :configuration
     @test isfinite(configuration.quality)
     @test configuration.quality != result.quality
+    # The returned configuration quality is Kojaku & Masuda (2018) eq. (13)
+    # exactly, and the ER quality is Kojaku & Masuda (2017) eq. (3) / M.
+    @test configuration.quality ≈
+          km2018_eq13(A, configuration.pair_labels, configuration.coreness)
+    @test result.quality ≈ km2017_eq3(A, result.pair_labels, result.coreness)
+
+    # Eq. (13) with every node in the core is the modularity of the pair
+    # partition (the paper's stated reduction), which only holds with the
+    # i = j null term that the configuration objective now carries.
+    all_core = ones(8)
+    communities = [1, 1, 1, 1, 2, 2, 2, 2]
+    graph = CorePeriphery._joint_build_graph(A)
+    context = CorePeriphery._JointConfigurationContext(
+        graph.total_weight, 1.0 / (2.0 * graph.total_weight), graph.degrees,
+    )
+    aggregates = CorePeriphery._joint_pair_aggregates(
+        communities, all_core, graph.degrees, 2,
+    )
+    degrees = vec(sum(A, dims=2))
+    M = sum(A) / 2
+    modularity = sum(
+        (A[i, j] - degrees[i] * degrees[j] / (2M)) * (communities[i] == communities[j])
+        for i in 1:8, j in 1:8
+    ) / (2M)
+    @test CorePeriphery._joint_objective(
+        graph, communities, all_core, context, aggregates) ≈ modularity
+
+    # Larger random fixture: the public result matches eq. (13), and the
+    # magnitude of the former omission (sum of squared core degrees / 4M^2)
+    # is not negligible. (The sparse periphery may leave small components.)
+    rng = MersenneTwister(7)
+    n = 30
+    R = zeros(n, n)
+    for i in 1:(n - 1), j in (i + 1):n
+        p = (i <= 8 && j <= 8) ? 0.8 : (i <= 8 || j <= 8) ? 0.3 : 0.05
+        rand(rng) < p && (R[i, j] = R[j, i] = 1.0)
+    end
+    fitted = Logging.with_logger(Logging.NullLogger()) do
+        multiple_cp_pairs(R; null_model=:configuration, rng=MersenneTwister(1))
+    end
+    @test fitted.quality ≈ km2018_eq13(R, fitted.pair_labels, fitted.coreness)
+    R_degrees = vec(sum(R, dims=2))
+    R_M = sum(R) / 2
+    omitted = sum(R_degrees[i]^2 for i in 1:n if fitted.coreness[i] == 1.0) / (4 * R_M^2)
+    @test omitted > 0.01
+
+    Logging.with_logger(Logging.NullLogger()) do
+        # `:penalized` is the default selection rule.
+        @test multiple_cp_pairs(A; n_runs=4, rng=MersenneTwister(9)).pair_selection == :penalized
+        @test multiple_cp_pairs(A; n_runs=4, rng=MersenneTwister(9)) ==
+              multiple_cp_pairs(A; n_runs=4, rng=MersenneTwister(9), pair_selection=:penalized)
+        @test multiple_cp_pairs(A; max_pairs=8, min_pair_size=1, n_runs=8,
+                                rng=MersenneTwister(9)).n_pairs <= 8
+
+        # `multiple_cp_pairs_config` is `multiple_cp_pairs` with the
+        # configuration null fixed: same result, eq. (13) quality, every other
+        # keyword forwarded, and a conflicting `null_model` rejected rather
+        # than silently overriding the wrapper.
+        wrapped = multiple_cp_pairs_config(A; n_runs=4, rng=MersenneTwister(9))
+        @test wrapped == multiple_cp_pairs(
+            A; null_model=:configuration, n_runs=4, rng=MersenneTwister(9))
+        @test wrapped.quality ≈ km2018_eq13(A, wrapped.pair_labels, wrapped.coreness)
+        @test wrapped.pair_selection == :penalized
+        @test multiple_cp_pairs_config(
+            A; n_runs=4, rng=MersenneTwister(9), pair_selection=:objective).pair_selection ==
+              :objective
+        @test multiple_cp_pairs_config(sparse(A); n_runs=4, rng=MersenneTwister(9)) == wrapped
+        @test_throws ArgumentError multiple_cp_pairs_config(A; null_model=:er)
+        @test_throws ArgumentError multiple_cp_pairs_config(A; null_model=:configuration)
+    end
 
     sparse_result = CorePeriphery._multiple_cp_pairs_joint(
         sparse(A); max_pairs=2, min_pair_size=2, n_runs=12,
@@ -149,15 +263,17 @@ end
     @test sparse_result.coreness == result.coreness
     @test sparse_result.quality ≈ result.quality
 
-    selected = multiple_cp_pairs(
-        A;
-        max_pairs=2,
-        min_pair_size=2,
-        n_runs=20,
-        pair_selection=:penalized,
-        pair_penalty=0.5,
-        rng=MersenneTwister(41),
-    )
+    selected = Logging.with_logger(Logging.NullLogger()) do
+        multiple_cp_pairs(
+            A;
+            max_pairs=2,
+            min_pair_size=2,
+            n_runs=20,
+            pair_selection=:penalized,
+            pair_penalty=0.5,
+            rng=MersenneTwister(41),
+        )
+    end
     @test selected.n_pairs == 2
     @test selected.pair_selection == :penalized
     @test selected.candidate_pair_counts == [1, 2]

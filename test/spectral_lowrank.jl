@@ -1,4 +1,7 @@
+using CorePeriphery
 using LinearAlgebra
+using Logging
+using Random
 using SparseArrays
 using Test
 
@@ -89,4 +92,81 @@ end
     looped = copy(A)
     looped[1, 1] = 1.0
     @test_throws ArgumentError CorePeriphery._lowrank_core(looped)
+    @test_throws ArgumentError CorePeriphery._lowrank_core(sparse(weighted))
+    @test_throws ArgumentError CorePeriphery._lowrank_core(sparse(looped))
+end
+
+ring_graph(n) = sparse([1:n; 1:n], [mod1.(2:(n + 1), n); mod1.(0:(n - 1), n)], 1.0, n, n)
+star_graph(n) = sparse([ones(Int, n - 1); 2:n], [2:n; ones(Int, n - 1)], 1.0, n, n)
+
+@testset "LowRank-Core ARPACK convergence on clustered spectra" begin
+    # Rings have eigenvalues 2cos(2πk/n) clustered near ±2; stars have a
+    # degenerate pair ±sqrt(n - 1). Both must converge with the finite ARPACK
+    # tolerance and agree with the dense LAPACK path.
+    for (name, build, n) in (("ring", ring_graph, 600), ("star", star_graph, 600),
+                             ("ring", ring_graph, 1001), ("star", star_graph, 1500))
+        A = build(n)
+        values, vectors = CorePeriphery._lowrank_eigenpairs(A)
+        dense_values, _ = CorePeriphery._lowrank_eigenpairs(Matrix(A))
+        @test abs.(values) ≈ abs.(dense_values) atol = 1e-8
+        @test abs(values[1]) >= abs(values[2])
+        sparse_result = spectral_method(A)
+        dense_result = spectral_method(Matrix(A))
+        @test sparse_result == dense_result
+        if name == "star"
+            # Hub scores 2(n - 1) - ish rank-two mass: it is the unique core.
+            @test argmax(sparse_result.coreness) == 1
+            @test sparse_result.core_nodes[1] == 1
+        end
+    end
+
+    # Convergence failures surface as ConvergenceError carrying the ARPACK
+    # settings, never as a bare ErrorException.
+    @test CorePeriphery._LOWRANK_TOL > 0
+    # Arpack.jl logs the Fortran XYAUPD failure at error level before it
+    # throws; that record is expected here and is silenced.
+    failure = Logging.with_logger(Logging.NullLogger()) do
+        try
+            CorePeriphery._lowrank_eigenpairs(ring_graph(400); ncv=3, maxiter=1)
+            nothing
+        catch caught
+            caught
+        end
+    end
+    @test failure isa ConvergenceError
+    @test occursin("maxiter=1", sprint(showerror, failure))
+    @test occursin("ncv=3", sprint(showerror, failure))
+end
+
+@testset "LowRank-Core pruned threshold scores" begin
+    # The active-row pruning must reproduce the full O(n²) pair loop exactly.
+    function reference_scores(values, vectors)
+        n = size(vectors, 1)
+        scores = zeros(Float64, n)
+        for i in 1:n
+            diagonal = values[1] * vectors[i, 1]^2 + values[2] * vectors[i, 2]^2
+            diagonal > 0.5 && (scores[i] += 1.0)
+            for j in (i + 1):n
+                reconstructed = values[1] * vectors[i, 1] * vectors[j, 1] +
+                                values[2] * vectors[i, 2] * vectors[j, 2]
+                if reconstructed > 0.5
+                    scores[i] += 1.0
+                    scores[j] += 1.0
+                end
+            end
+        end
+        return scores
+    end
+    rng = MersenneTwister(77)
+    for trial in 1:20
+        n = rand(rng, 2:40)
+        values = [10.0 * randn(rng), 10.0 * randn(rng)]
+        vectors = randn(rng, n, 2)
+        @test CorePeriphery._thresholded_rank_two_scores(values, vectors) ==
+              reference_scores(values, vectors)
+    end
+    planted = ideal_cp_adjacency(30, 1:6)
+    values, vectors = CorePeriphery._lowrank_eigenpairs(planted)
+    @test CorePeriphery._thresholded_rank_two_scores(values, vectors) ==
+          reference_scores(values, vectors)
 end

@@ -1,10 +1,12 @@
 # Development Record and Roadmap
 
-This page records the scientific audit, implementation refactor, performance work,
-and cross-package validation carried out in July 2026. It also identifies the work
-that should precede the next release. The implementation described here is development
-work on top of baseline commit `a2226832508c57efdeab71cde1f055549ca028e7`; it should
-not be treated as released until it has been reviewed, committed, and tagged.
+This page records the scientific audit, implementation refactor, performance work, and
+cross-package validation carried out in July 2026 for version 0.2.0, the expert-panel
+review of October 2026 and the revision it triggered, together with the limitations
+that remain. The work replaced the 0.1.0 implementation. The pre-refactor snapshot
+that the ablation and versioned benchmarks were measured against predates this
+repository's published history and cannot be checked out from it; see
+`benchmark/README.md` for what is and is not reproducible.
 
 ## Scope and evidence
 
@@ -26,29 +28,57 @@ The evidence is retained in four reports:
 - [`benchmark/OPTIMIZATION.md`](https://github.com/simoneSantoni/CorePeriphery.jl/blob/main/benchmark/OPTIMIZATION.md)
   records before/after hotspot measurements and the current regression gate.
 
-These links target `main` and will resolve after the development work is merged.
-
 ## Completed scientific and API work
 
 | Area | Completed work | Resulting contract |
 |---|---|---|
 | Shared input validation | Centralized square, finite, nonnegative, loop-free, symmetry, and binary checks, including sparse matrices | Invalid inputs fail consistently instead of being silently reinterpreted |
 | Borgatti--Everett | Reworked objective evaluation around sufficient statistics and protected degenerate inputs | Reported quality is evaluated on the returned state; empty/constant cases are finite |
-| Lip | Replaced the previous heuristic with the published degree-prefix minimizer | Simple undirected binary input; deterministic smallest minimizing prefix |
+| Lip | Replaced the previous heuristic with the published degree-prefix minimizer | Simple undirected binary input; deterministic smallest minimizing prefix; reported quality is the discrete Pearson correlation of that prefix |
 | LowRank-Core | Implemented rank-two reconstruction, thresholded row scores, and Find-Cut | Binary undirected input; sparse matrices use two ARPACK eigenpairs without a dense reconstruction |
-| Rombach | Replaced coordinate-grid work with seeded template-permutation restarts and cached swap deltas | Explicit RNG and reproducible restarts; quality is the optimized template objective |
+| Rombach | Replaced coordinate-grid work with seeded template-permutation restarts and cached swap deltas; October 2026: exact eq. (4.9) template with `⌊βN⌋`, sum-to-one normalisation, eq. (4.10) quality, `partition=:beta`, and the eq. (4.11) aggregate `rombach_core_score` | Explicit RNG and reproducible restarts; `beta` is the periphery fraction; quality is the eq. (4.10) objective for one `(alpha, beta)` pair |
 | MINRES | Added distinct symmetric `ww'` and directed `uv'` rank-one estimators | Symmetric comparisons use `minres_symmetric`; `CPDirectedResult` retains sender, receiver, combined scores, residual, and explained-weight quality |
 | Della Rossa | Implemented equation-(5) persistence and equation-(8) centralization, then added the published stochastic tie mode and directed stationary-flow formulation | Deterministic compatibility default; `tie_break=:paper` with an RNG; directed input must be strongly connected |
-| Surprise | Replaced the approximation with the multivariate-hypergeometric joint-tail statistic in log space | Exact statistic for simple undirected binary graphs |
-| Multiple CP pairs | Added joint pair/role label switching plus compatibility and penalized pair-count selection | Seeded restarts, pair-size constraints, and candidate objective/selection diagnostics in `CPMultiResult` |
-| Significance | Added ER, degree-switching, directed in/out-degree switching, and fixed-topology weight-permutation nulls | Reproducible serial/threaded sampling, strict switch completion, and per-sample diagnostics through `CPSignificanceResult` |
+| Surprise | Replaced the approximation with the multivariate-hypergeometric joint-tail statistic in log space | Exact statistic for simple undirected binary graphs; greedy single-start optimiser |
+| Multiple CP pairs | Added joint pair/role label switching plus compatibility and penalized pair-count selection; October 2026: restored the eq. (13) `i = j` null term, penalised selection by default, isolates labelled `0` | Seeded restarts, pair-size constraints, and candidate objective/selection diagnostics in `CPMultiResult`; configuration objective is eq. (13) exactly; pair-count selection is a package variant |
+| Significance | Added ER, degree-switching, directed in/out-degree switching, and fixed-topology weight-permutation nulls; October 2026: effect sizes, `n_samples=999`, `pass_rng=true`, sparse-aware workspaces, work-queue scheduling | Reproducible serial/threaded sampling, strict switch completion, and per-sample diagnostics through `CPSignificanceResult` |
+| Borgatti--Everett family (October 2026) | Missing-block model (`cp_block=:missing`), directed correlation, restarts, Gray-code exhaustive optimum | `:ones` and undirected remain the defaults; `method=:exhaustive` is a global optimum for `n ≤ 24` |
+| Partitions, isolates, components (October 2026) | Shared `_partition` helper with strict median and explicit rules; `_isolates`/`_enforce_isolates!`; `_warn_disconnected` | Ties at the median are periphery; isolates are never core; one warning per detector per session on disconnected input |
+| Input and reporting (October 2026) | Labelled `adjacency_to_matrix(edges)`, `directed`/`combine` keywords, `block_densities` | Conflicting duplicate dyads raise unless `combine=` is given |
 | Rossa robustness | Added lazy, constrained-linear, and automatic stationary solvers plus paper-mode ensembles | Solver residual/iteration metadata and serial/thread-reproducible uncertainty summaries |
 | Ecosystem integration | Added an optional Graphs.jl extension and generic dense/sparse matrix support | Graph objects are converted lazily through the weak dependency; Graphs.jl is not a hard dependency |
 
-Legacy `n_walks` and `walk_length` Rossa keywords remain accepted but are ignored,
-because the implemented method computes persistence analytically rather than simulating
-walks. Julia 1.10 is the compatibility floor; Julia 1.12 is the primary optimization,
-documentation, and regression-gate runtime.
+Legacy `n_walks` and `walk_length` Rossa keywords remain accepted but are ignored
+(with a deprecation warning), because the implemented method computes persistence
+analytically rather than simulating walks. Julia 1.10 is the compatibility floor. The
+July 2026 measurements used Julia 1.10 and 1.12; Julia 1.13 is now the primary
+development runtime and CI tests all three.
+
+## October 2026 panel review and revision
+
+An expert panel (sociology, computational social science, SNA, network science, Julia,
+software engineering, science communication) reviewed the 0.2.0 working tree
+independently. Its consensus findings and the resulting changes:
+
+| Finding | Resolution |
+|---|---|
+| The `>=` median split made `core_nodes` meaningless for continuous detectors (stars all-core; Rombach `beta` did not change the core size) | Strict `>` median; explicit `partition` keyword (`:median`, `:none`, `:threshold`, `:core_size`); Rombach `partition=:beta` derives the core from `beta` |
+| Rombach `beta` documented backwards and the template used `i/n` instead of `⌊βN⌋`; no aggregate core score | Eq. (4.9) implemented exactly, `beta` is the periphery fraction, core vector sums to one, eq. (4.10) quality, `rombach_core_score` (eq. 4.11); tutorial grid search by quality replaced |
+| KM-configuration objective omitted the `i = j` term of eq. (13) (confirmed: 17% gap on the planted test) | Term restored in `_joint_expected` and all move deltas; literal eq. (3)/(13) oracles; `DIVERGENCE.md` corrected |
+| Borgatti--Everett missing-block model and directed support absent | `cp_block=:missing`, `directed=true`, `n_runs`, `method=:exhaustive` |
+| No labelled input path; silent last-weight-wins symmetrisation | `adjacency_to_matrix(edges)` returns `(A, labels)`; `directed`/`combine` keywords; conflicting duplicates raise |
+| Null-model choice presented as interchangeable; no effect sizes; `n_samples=199`, `pass_rng=false` | "Which null answers which question" guidance; `null_mean`/`null_std`/`zscore`; `n_samples=999`, `pass_rng=true`; weighted input with a binary null raises |
+| `multiple_cp_pairs` over-partitioned with `:objective` and the ER null | `pair_selection=:penalized` default; configuration null recommended in the docstring |
+| Disconnected components and isolates handled silently | Isolate guarantee and one-time warning in every detector except Surprise and LowRank-Core |
+| Threaded `:greedy` significance intermittently non-deterministic | Root cause (closure-captured buffer names shared across tasks) fixed; `Channel` work queue; 144,000-run stress with zero mismatches |
+| Surprise `O(E²)` per flip; ARPACK `tol = 0` stalls; sparse wrappers fell to dense kernels; dense `n × n` null buffers per worker | Mode-outward tail evaluation with rigorous truncation; finite ARPACK tolerance with `ncv = 48`; wrapper unwrapping; sparse `_NullWorkspace` |
+| Copyrighted PDFs in `algo/`; release provenance; missing `hash`; `Float64`-only keywords; monolithic source file | Reference list by DOI; CI/CompatHelper/TagBot/Aqua; `==`/`isequal`/`hash`/`show` on all results; `Real` keywords; one file per algorithm family |
+
+Development measurements for the performance items: Surprise `n = 400`, density 0.05,
+15.1 s to 28 ms; planted `n = 512`, 11.2 s to 6 ms; sparse significance `n = 2048`,
+1.0 s to 0.32 s; 2000-node ring LowRank-Core 13.4 s to about 3 s. On the revision
+host (Julia 1.13.2) the same cases measured 3.6 s to 24 ms, 0.32 s to 0.06 s, and 4.1 s
+to 1.2 s against the pre-revision commit.
 
 ## Rossa paper audit
 
@@ -62,7 +92,7 @@ flow. Directed tie strength is total in-plus-out strength, as specified by the p
 A lazy stationary iteration preserves the target distribution and also converges on
 periodic strongly connected graphs.
 
-The API now distinguishes two selection policies:
+The API distinguishes two selection policies:
 
 - `tie_break=:deterministic` selects the lower node index after the paper's persistence
   and minimum-strength criteria. This preserves the package's reproducible default.
@@ -92,8 +122,9 @@ The main performance gains came from changing asymptotic work and data movement:
 Development measurements reported approximately 339x and 336x improvements for one
 dense Borgatti--Everett discrete and continuous sweep, 32x for dense Rossa profiling,
 more than 1,000x for the exact Surprise workload, 33--72x for multi-pair workloads,
-74x for sparse directed MINRES, and 17x for sparse LowRank-Core. These are same-machine,
-warmed development measurements, not portable performance guarantees.
+74x for sparse directed MINRES, and 17x for sparse LowRank-Core. These were same-machine,
+warmed development measurements against the pre-refactor snapshot, not portable
+performance guarantees.
 
 The dense/sparse ablation is scientifically important: current dense and sparse paths
 produced identical top-k sets, explicit core sets, and pair partitions in all 27 fitted
@@ -111,7 +142,7 @@ low-level work.
 
 Lower concordance was traced to algorithmic or output-definition differences:
 
-- The headline MINRES row now fits the same symmetric `ww'` estimand in both packages.
+- The headline MINRES row fits the same symmetric `ww'` estimand in both packages.
   cpnet still selects the largest residual across restarts, uses a scorer inconsistent
   with its gradient, and stops loosely. Correct selection and tighter convergence raise
   mean rank concordance with Julia from 0.320 to 0.918.
@@ -130,30 +161,38 @@ named methods expose different mathematical estimands.
 
 ## Verification completed
 
-The 0.2 release candidate passes:
+As of the July 2026 audit, the 0.2.0 code base passed:
 
-- all 1,525 package checks through `Pkg.test()` on Julia 1.12 (and 1,524 on Julia
-  1.10), including 1,056
-  exhaustive/direct scientific-validation checks, sparse/dense equivalence, Graphs.jl
-  dispatch, directed Rossa, statistical contracts, and threading;
+- the full `Pkg.test()` suite on Julia 1.10 and 1.12 (about 1,500 checks at that time,
+  including roughly 1,050 exhaustive/direct scientific-validation checks, sparse/dense
+  equivalence, Graphs.jl dispatch, directed Rossa, statistical contracts, and
+  threading);
 - a direct stationary linear-system oracle for weighted directed Rossa;
 - seeded stochastic Rossa reproducibility and periodic directed-cycle tests;
 - the strict Documenter build and doctests;
 - `git diff --check`;
-- the existing cpnet divergence replay after the Rossa extension;
+- the cpnet divergence replay after the Rossa extension;
 - the dependency-free two-thread scaling and allocation gate on Julia 1.10 and 1.12.
+
+The check counts are those recorded at the audit and change as the test suite evolves;
+the CI workflow is the authoritative record for the current tree. After the October
+2026 revision the suite (about 546,000 checks, 541,852 of them from the brute-force
+Borgatti--Everett optimum over every graph with `n ≤ 6`) passes on Julia 1.10, 1.12,
+and 1.13.2 with two threads, together with Aqua.jl, the strict Documenter build on
+1.13, `examples/basic_usage.jl`, `git diff --check`, and the quick scaling gate on
+1.10 and 1.13.2.
 
 ## Remaining limitations and risks
 
 1. The empirical cross-package corpus contains only three small planted networks. The
    independent oracle suite is much broader at small `n`, but larger licensed real,
    temporal, weighted, directed, and adversarial corpora remain future research work.
-2. Edge switching has no universal finite mixing-time guarantee. CorePeriphery.jl now
+2. Edge switching has no universal finite mixing-time guarantee. CorePeriphery.jl
    guarantees that the requested accepted-swap count completes or is explicitly
    reported; that is a completion guarantee, not proof that a chain has mixed.
 3. The direct stationary solver intentionally materializes dense matrices and is for
-   smaller problems. Sparse `:lazy` remains subject to slow mixing, but failures now
-   report method, iterations, tolerance, and residual and users can supply a validated
+   smaller problems. Sparse `:lazy` remains subject to slow mixing, but failures report
+   method, iterations, tolerance, and residual and users can supply a validated
    stationary vector.
 4. Pair-count penalization controls the tested planted single-pair cases but is a
    model-selection heuristic, not a universal significance guarantee. Candidate scores
@@ -163,13 +202,16 @@ The 0.2 release candidate passes:
    different question and remains a possible future feature.
 6. The cross-package Python environment is manually assembled around the 2022 cpnet
    revision and NumPy 1.x; exact revisions are recorded, but this leg is not in CI.
+7. The pre-refactor benchmark snapshot is not part of this repository's history, so the
+   ablation's old-implementation leg and the versioned performance snapshot are
+   historical records rather than reproducible measurements.
 
 ## Release-roadmap resolution
 
-The audit roadmap is implemented in 0.2.0. Each issue is closed only after the clean
-supported-version CI and release checks complete.
+The audit roadmap was implemented in 0.2.0. Each tracking issue was closed after the
+corresponding change passed the supported-version CI and release checks.
 
-| Priority | Delivered change | Tracking issue | Release status |
+| Priority | Delivered change | Tracking issue | Status |
 |---:|---|---|---|
 | 1 | Explicit configuration-switch completion and diagnostics | [#3](https://github.com/simoneSantoni/CorePeriphery.jl/issues/3) | Implemented and tested |
 | 2 | Alternative Rossa stationary solvers and convergence metadata | [#4](https://github.com/simoneSantoni/CorePeriphery.jl/issues/4) | Implemented and tested |
@@ -180,17 +222,21 @@ supported-version CI and release checks complete.
 | 7 | Directed configuration and weighted permutation significance | [#9](https://github.com/simoneSantoni/CorePeriphery.jl/issues/9) | Implemented and tested |
 | 8 | Julia 1.10/1.12 versioned performance and allocation tracking | [#10](https://github.com/simoneSantoni/CorePeriphery.jl/issues/10) | Implemented and tested |
 | 9 | Algorithm/result/directionality contract documentation | [#11](https://github.com/simoneSantoni/CorePeriphery.jl/issues/11) | Implemented; strict docs pass |
-| 10 | Changelog, migration guide, version 0.2.0, and release review | [#12](https://github.com/simoneSantoni/CorePeriphery.jl/issues/12) | Awaiting clean CI and tag |
+| 10 | Changelog, migration guide, version 0.2.0, and release review | [#12](https://github.com/simoneSantoni/CorePeriphery.jl/issues/12) | Implemented |
 
 ## Reproduction commands
 
 From the repository root:
 
 ```sh
-julia --project=. -e 'using Pkg; Pkg.test()'
-julia --project=docs docs/make.jl
-julia --threads=2 --project=. benchmark/scaling.jl --quick --check
+julia +1.13.2 --threads=2 --project=. -e 'using Pkg; Pkg.test()'
+julia +1.13.2 --project=docs -e 'using Pkg; Pkg.instantiate()'
+julia +1.13.2 --project=docs docs/make.jl
+julia +1.13.2 --threads=2 --project=. benchmark/scaling.jl --quick --check
 ```
 
-The full cross-package and ablation workflows, including pinned environment details,
-are documented in `benchmark/README.md`.
+Repeat the tests on `julia +1.10` and `julia +1.12` before a release; the docs build
+needs Julia 1.11 or newer.
+
+The full cross-package and ablation workflows, including pinned environment details
+and the parts that are no longer reproducible, are documented in `benchmark/README.md`.

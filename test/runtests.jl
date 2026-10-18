@@ -2,14 +2,12 @@
 Unit tests for CorePeriphery module.
 """
 
-
-
 using CorePeriphery
 using Test
 using LinearAlgebra
 using Random
 
-Random.seed!(123)
+# No global `Random.seed!`: every stochastic call below passes an explicit `rng`.
 
 @testset "CorePeriphery Tests" begin
 
@@ -145,7 +143,7 @@ Random.seed!(123)
             A[1, i] = A[i, 1] = 1.0
         end
 
-        result = random_walker_profiling(A; n_walks=500, walk_length=5)
+        result = random_walker_profiling(A)
 
         @test length(result.coreness) == n
         @test result.algorithm == "Random Walker Profiling"
@@ -159,11 +157,12 @@ Random.seed!(123)
         edges = [(1, 2), (1, 3), (2, 3), (4, 1)]
         A = adjacency_to_matrix(edges, 4)
 
-        result = rombach_continuous(A; n_runs=2, max_iter=50)
+        result = rombach_continuous(A; n_runs=2, max_iter=50, rng=MersenneTwister(1))
 
         @test length(result.coreness) == 4
         @test result.algorithm == "Rombach Continuous"
         @test all(x -> 0.0 <= x <= 1.0, result.coreness)
+        @test sum(result.coreness) ≈ 1.0
     end
 
     @testset "MINRES/SVD" begin
@@ -213,12 +212,26 @@ Random.seed!(123)
         A[7, 5] = A[5, 7] = 1.0
         A[8, 6] = A[6, 8] = 1.0
 
-        result = multiple_cp_pairs(A)
+        # The two planted pairs are disconnected from each other, so the
+        # detector emits its one-time disconnected-input warning.
+        result = @test_logs (:warn, r"connected components with at least two nodes") match_mode=:any multiple_cp_pairs(
+            A; rng=MersenneTwister(1))
 
         @test length(result.pair_labels) == 8
         @test length(result.coreness) == 8
         @test result.n_pairs >= 1
         @test result.algorithm == "Multiple CP Pairs"
+
+        # The configuration-null wrapper forwards every other keyword and
+        # refuses a conflicting null_model instead of silently overriding it.
+        configuration = @test_logs (:warn, r"connected components") match_mode=:any multiple_cp_pairs_config(
+            A; rng=MersenneTwister(1))
+        explicit = @test_logs (:warn, r"connected components") match_mode=:any multiple_cp_pairs(
+            A; null_model=:configuration, rng=MersenneTwister(1))
+        @test configuration == explicit
+        @test configuration.algorithm == "Multiple CP Pairs"
+        @test configuration.pair_selection == :penalized
+        @test_throws ArgumentError multiple_cp_pairs_config(A; null_model=:er)
     end
 
     @testset "Surprise CP" begin
@@ -249,7 +262,7 @@ Random.seed!(123)
         ]
         A = adjacency_to_matrix(edges, 7)
 
-        result = label_switching_cp(A)
+        result = label_switching_cp(A; rng=MersenneTwister(1))
 
         @test length(result.coreness) == 7
         @test result.algorithm == "Label Switching CP"
@@ -296,16 +309,17 @@ Random.seed!(123)
     end
 
     @testset "Consistency Checks" begin
-        # Same network should give consistent results
-        Random.seed!(999)
+        # Deterministic detectors reproduce themselves without any seeding;
+        # stochastic ones do so for the same explicit rng.
         edges = [(1, 2), (1, 3), (2, 3), (1, 4), (2, 5)]
         A = adjacency_to_matrix(edges, 5)
 
         result1 = borgatti_everett_continuous(A)
         result2 = borgatti_everett_continuous(A)
+        @test result1 == result2
 
-        # With same initialization, should get same result
-        @test result1.coreness ≈ result2.coreness atol = 1e-6
+        @test label_switching_cp(A; rng=MersenneTwister(7), n_runs=3) ==
+              label_switching_cp(A; rng=MersenneTwister(7), n_runs=3)
     end
 
 end
@@ -319,7 +333,14 @@ include("spectral_lowrank.jl")
 include("multipair_joint.jl")
 include("directed_minres.jl")
 include("significance.jl")
+include("surprise_kernel.jl")
 include("performance_kernels.jl")
 include("graphs_extension.jl")
-
-println("\nAll tests passed!")
+include("result_types.jl")
+include("generic_inputs.jl")
+include("partitions.jl")
+include("rombach.jl")
+include("borgatti_everett.jl")
+include("components_isolates.jl")
+include("input_path.jl")
+include("aqua.jl")

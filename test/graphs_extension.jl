@@ -1,5 +1,6 @@
 using CorePeriphery
 using Graphs
+using Random
 using SparseArrays
 using Test
 
@@ -15,6 +16,11 @@ using Test
     @test lip_discrete(graph).coreness == lip_discrete(A).coreness
     @test spectral_method(graph; beta=0.2).coreness ==
           spectral_method(A; beta=0.2).coreness
+    @test rombach_core_score(graph; alphas=[0.5], betas=[0.5], n_runs=1,
+                             rng=MersenneTwister(1)) ==
+          rombach_core_score(A; alphas=[0.5], betas=[0.5], n_runs=1,
+                             rng=MersenneTwister(1))
+    @test block_densities(A, lip_discrete(graph)) == block_densities(A, lip_discrete(A))
 
     digraph = SimpleDiGraph(3)
     add_edge!(digraph, 1, 2)

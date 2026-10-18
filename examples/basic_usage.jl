@@ -115,13 +115,23 @@ println("   Core nodes: $(length(result_be_cont.core_nodes))")
 println("   Accuracy: $(round(acc * 100, digits=1))%")
 println()
 
-# Algorithm 2: Borgatti-Everett Discrete
-result_be_disc = borgatti_everett_discrete(A)
+# Algorithm 2: Borgatti-Everett Discrete (multi-start; `cp_block=:missing`
+# gives the missing-block model that Borgatti & Everett recommend).
+result_be_disc = borgatti_everett_discrete(A; n_runs=5, rng=MersenneTwister(1))
 acc = compute_accuracy(result_be_disc, true_labels)
 println("2. $(result_be_disc.algorithm)")
 println("   Quality: $(round(result_be_disc.quality, digits=3))")
 println("   Core nodes: $(length(result_be_disc.core_nodes))")
 println("   Accuracy: $(round(acc * 100, digits=1))%")
+# The UCINET-style density table is the standard companion of a fit.
+densities = block_densities(A, result_be_disc)
+println("   Block densities: core-core $(round(densities.core_core, digits=2)), ",
+        "core-periphery $(round(densities.core_periphery, digits=2)), ",
+        "periphery-periphery $(round(densities.periphery_periphery, digits=2))")
+result_be_missing = borgatti_everett_discrete(A; cp_block=:missing, n_runs=5,
+                                              rng=MersenneTwister(1))
+println("   Missing-block variant: quality $(round(result_be_missing.quality, digits=3)), ",
+        "core nodes $(length(result_be_missing.core_nodes))")
 println()
 
 # Algorithm 3: Lip's Fast Discrete
@@ -151,13 +161,21 @@ println("   Core nodes: $(length(result_rw.core_nodes))")
 println("   Accuracy: $(round(acc * 100, digits=1))%")
 println()
 
-# Algorithm 6: Rombach Continuous (slower, so use fewer runs)
+# Algorithm 6: Rombach Continuous (slower, so use fewer runs). `beta` is the
+# fraction of nodes in the *periphery*: the default partition keeps the
+# n - floor(beta * n) core ranks of the template, so beta = 2/3 asks for a
+# ten-node core here.
 println("6. Rombach Continuous (running...)")
-result_rombach = rombach_continuous(A; n_runs=3)
+result_rombach = rombach_continuous(A; beta=2 / 3, n_runs=3)
 acc = compute_accuracy(result_rombach, true_labels)
 println("   Quality: $(round(result_rombach.quality, digits=3))")
 println("   Core nodes: $(length(result_rombach.core_nodes))")
 println("   Accuracy: $(round(acc * 100, digits=1))%")
+# The paper's deliverable is the aggregate core score averaged over an
+# (alpha, beta) grid; a coarse grid keeps this example fast.
+result_core_score = rombach_core_score(A; alphas=0.25:0.25:1, betas=0.25:0.25:1, n_runs=1)
+acc = compute_accuracy(result_core_score, true_labels)
+println("   Aggregate core score accuracy (4x4 grid): $(round(acc * 100, digits=1))%")
 println()
 
 # Algorithm 7: MINRES/SVD
@@ -187,8 +205,12 @@ println("   Core nodes: $(length(result_ls.core_nodes))")
 println("   Accuracy: $(round(acc * 100, digits=1))%")
 println()
 
-# Algorithm 10: Multiple CP Pairs
-result_multi = multiple_cp_pairs(A)
+# Algorithm 10: Multiple CP Pairs. The number of pairs is chosen with the
+# penalised rule (`pair_selection=:penalized`, the default); the raw-objective
+# rule (`:objective`) tends to over-partition a single planted pair. Kojaku &
+# Masuda (2018) recommend the configuration null, which only rewards
+# core-periphery structure beyond what the degree sequence explains.
+result_multi = multiple_cp_pairs(A; null_model=:configuration)
 println("10. $(result_multi.algorithm)")
 println("   Quality: $(round(result_multi.quality, digits=3))")
 println("   Number of pairs: $(result_multi.n_pairs)")
@@ -241,6 +263,22 @@ for i in 1:6
     label = i in result_weighted.core_nodes ? "CORE" : "PERIPHERY"
     println("  Node $i: $score ($label)")
 end
+
+# Example 4: Labelled edge list (node identifiers need not be integers)
+println("\nExample 4: Labelled Edge List")
+println("-" ^ 40)
+
+labelled_edges = [
+    ("alice", "bob"), ("alice", "carol"), ("bob", "carol"),
+    ("alice", "dave"), ("bob", "erin"), ("carol", "frank"),
+]
+# `labels[k]` is the identifier of matrix row/column `k` (first-appearance
+# order). Conflicting duplicate dyads raise an error unless `combine=` is set;
+# `directed=true` keeps (i, j) and (j, i) distinct.
+A_labelled, labels = adjacency_to_matrix(labelled_edges)
+result_labelled = lip_discrete(A_labelled)
+println("Core: ", join(labels[result_labelled.core_nodes], ", "))
+println("Periphery: ", join(labels[result_labelled.periphery_nodes], ", "))
 
 println("\n" * "=" ^ 60)
 println("Examples completed!")

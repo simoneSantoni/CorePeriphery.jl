@@ -36,11 +36,14 @@ end
     @test first_result.quality == second_result.quality
     @test first_result.coreness[1] == maximum(first_result.coreness)
 
-    objective = sum(
+    # Eq. (4.10) is the full double sum, so each undirected edge counts twice;
+    # the core vector is normalised to sum to one as in the paper.
+    objective = 2 * sum(
         A[i, j] * first_result.coreness[i] * first_result.coreness[j]
         for i in 1:4 for j in (i + 1):5
     )
     @test first_result.quality ≈ objective
+    @test sum(first_result.coreness) ≈ 1.0
 
     sharp = rombach_continuous(
         A; alpha=1.0, beta=0.5, n_runs=2, max_iter=50,
@@ -54,7 +57,7 @@ end
 
     @test_throws ArgumentError rombach_continuous(A; alpha=-0.1)
     @test_throws ArgumentError rombach_continuous(A; alpha=1.1)
-    @test_throws ArgumentError rombach_continuous(A; beta=0.0)
-    @test_throws ArgumentError rombach_continuous(A; beta=1.0)
+    @test_throws ArgumentError rombach_continuous(A; beta=-0.1)
+    @test_throws ArgumentError rombach_continuous(A; beta=1.1)
     @test_throws DimensionMismatch rombach_continuous(zeros(2, 3))
 end

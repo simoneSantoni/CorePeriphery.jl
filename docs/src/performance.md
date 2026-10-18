@@ -36,11 +36,15 @@ result = cp_significance(
 
 The package assigns a deterministic child RNG to each sample before scheduling,
 so a fixed input RNG produces the same sample sequence in serial and threaded
-runs. Julia 1.12 uses a benchmark-informed mix of greedy task-local scheduling
-and static workers by default; pass `thread_schedule=:static` for uniform
-workloads or explicitly use `:greedy` for irregular null-model/detector runtimes. Julia 1.10 retains the
-static generic path. When nesting threaded significance tests around algorithms that use BLAS,
-set BLAS to one thread to avoid oversubscription:
+runs. The default `thread_schedule=:auto` (and `:greedy`) feeds the samples through a
+work queue with one task per thread, which balances irregular null-model and detector
+runtimes; `:static` assigns samples round-robin to one task per thread and cannot be
+used from inside another threaded region. Every schedule gives the same result bit
+for bit on every supported Julia version. Null samples are drawn in the storage format
+of the input, so pass a `SparseMatrixCSC` for large sparse networks: the samplers
+assemble each null directly in compressed sparse column form and the detectors use
+their sparse kernels. When nesting threaded significance tests around algorithms that
+use BLAS, set BLAS to one thread to avoid oversubscription:
 
 ```julia
 using LinearAlgebra
@@ -118,11 +122,15 @@ execution is not currently exposed: most greedy algorithms are sequential, while
 matrix-free sparse CPU paths avoid transfer and launch overhead that would dominate
 typical network sizes.
 
-CorePeriphery.jl supports Julia 1.10 and newer. Julia 1.12 is the primary benchmark and
-documentation runtime; Julia 1.10 is the compatibility floor. Run
-`benchmark/run_versioned_performance.sh` to regenerate the Julia 1.10/1.12 TSV and
-Markdown snapshot. The current
+CorePeriphery.jl supports Julia 1.10 and newer. Julia 1.13 is the primary development
+and documentation runtime; Julia 1.10 is the compatibility floor. The regression gate
+compares the minimum over repetitions (5 in `--quick` mode, 7 in full mode) against
+the targets in `benchmark/regression_targets.jl` and reports minimum, median, and
+maximum columns. Run `benchmark/run_versioned_performance.sh` to regenerate the Julia
+1.10/1.12/1.13 TSV and Markdown snapshot. The committed
 [`VERSIONED_PERFORMANCE.md`](https://github.com/simoneSantoni/CorePeriphery.jl/blob/main/benchmark/VERSIONED_PERFORMANCE.md)
-report includes seven-repetition ranges through `n = 512`, source/CPU/thread/BLAS
-provenance, allocations, dense/sparse LowRank-Core, Surprise, directed Rossa, symmetric
-and directed MINRES, penalized multi-pair fitting, and significance scheduling.
+report is a historical Julia 1.10/1.12 snapshot (it predates the Surprise and sparse
+significance rewrites, so its Surprise rows are obsolete) with seven-repetition ranges
+through `n = 512`, source/CPU/thread/BLAS provenance, allocations, dense/sparse
+LowRank-Core, Surprise, directed Rossa, symmetric and directed MINRES, penalized
+multi-pair fitting, and significance scheduling.

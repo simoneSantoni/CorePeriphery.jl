@@ -1,4 +1,9 @@
+using CorePeriphery
+using LinearAlgebra
+using Random
 using SparseArrays
+using Statistics
+using Test
 
 function reference_quality(A, c; discrete=false, directed=false)
     adjacency = Float64[]

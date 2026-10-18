@@ -1,6 +1,3 @@
-using Random
-using SparseArrays
-
 struct _JointGraph
     neighbors::Vector{Vector{Int}}
     weights::Vector{Vector{Float64}}
@@ -45,8 +42,12 @@ The objective is
 
 `sum((A[i,j] - P[i,j]) * max(x[i], x[j]) * (label[i] == label[j]) for i < j) / m`,
 
-where `P` is either an Erdős--Rényi density null (`:er`) or the configuration
-null `degree[i] * degree[j] / (2m)` (`:configuration`). Input must be a finite,
+where `P` is either an Erdős--Rényi density null (`:er`, Kojaku & Masuda 2017
+eq. 3 divided by `m`) or the configuration null `degree[i] * degree[j] / (2m)`
+(`:configuration`). The configuration objective additionally carries the
+`i = j` null term of Kojaku & Masuda (2018) eq. (13),
+`- sum(degree[i]^2 for i in core) / (4 m^2)`, so that it equals eq. (13)
+exactly (and reduces to modularity when every node is core). Input must be a finite,
 nonnegative, symmetric adjacency matrix with a zero diagonal; the objective is
 then evaluated once per dyad over its upper triangle. Pair-size feasibility is
 preserved throughout each run, and final labels are consecutive. The returned
@@ -62,6 +63,7 @@ function _multiple_cp_pairs_joint(A::AbstractMatrix{<:Real};
     pair_selection::Symbol=:objective,
     pair_penalty::Real=0.5,
     rng::AbstractRNG=Random.default_rng())
+    A = _unwrap_adjacency(A)
     n = _validate_adjacency(A; symmetric=true)
     null_model in (:er, :configuration) ||
         throw(ArgumentError("null_model must be :er or :configuration"))
@@ -288,11 +290,6 @@ function _joint_build_graph(A::SparseMatrixCSC{<:Real,<:Integer})
     return _JointGraph(neighbors, weights, degrees, total_weight)
 end
 
-function _joint_graph_data(A::AbstractMatrix{<:Real})
-    graph = _joint_build_graph(A)
-    return graph.neighbors, graph.degrees, graph.total_weight
-end
-
 function _joint_pair_aggregates(labels, core, degrees, n_pairs)
     aggregates = _JointPairAggregates(
         zeros(Int, n_pairs), zeros(Int, n_pairs),
@@ -327,6 +324,8 @@ function _joint_pair_contribution(
         if same_pair
             degree_sum -= _joint_node_degree(context, node)
         end
+        return _joint_residual_sum(context, node, observed, count, degree_sum) +
+            _joint_diagonal_term(context, node)
     else
         observed = observed_core[pair]
         remove_old_core = same_pair && old_role == 1.0
@@ -351,6 +350,19 @@ function _joint_residual_sum(
 )
     expected = context.degrees[node] * context.inv_double_weight * degree_sum
     return (observed - expected) / context.normalization
+end
+
+# Kojaku & Masuda (2018) eq. (13) sums over all (i, j) including i = j. With a
+# zero diagonal the i = j null term -d_i^2 / (2M) survives for every core node
+# (x_i + x_i - x_i^2 = x_i), and in the per-dyad normalisation used here
+# (1 / M per unordered dyad, i.e. 1 / (2M) per ordered pair) it contributes
+# -d_i^2 / (4M^2) to the objective. It depends only on the node's own role, so
+# it is part of the node's contribution in every move delta. The ER objective
+# (Kojaku & Masuda 2017 eq. 3) is strictly lower-triangular and has no such term.
+_joint_diagonal_term(::_JointERContext, node) = 0.0
+function _joint_diagonal_term(context::_JointConfigurationContext, node)
+    degree = context.degrees[node]
+    return -degree * degree * context.inv_double_weight / 2.0 / context.normalization
 end
 
 function _joint_update_aggregates!(
@@ -420,33 +432,12 @@ function _joint_expected(context::_JointConfigurationContext, aggregates)
             degree_sum * degree_sum - degree_square_sum -
             periphery_degree_sum * periphery_degree_sum + periphery_degree_square_sum
         ) / 2.0
-        expected += context.inv_double_weight * eligible_degree_products
+        # Off-diagonal eligible dyads plus the i = j null term of every core
+        # node (eq. 13 of Kojaku & Masuda 2018; see `_joint_diagonal_term`).
+        expected += context.inv_double_weight *
+            (eligible_degree_products + aggregates.core_degree_square_sums[pair] / 2.0)
     end
     return expected
-end
-
-function _joint_objective(labels, core, residual)
-    quality = 0.0
-    n = length(labels)
-    for i in 1:(n - 1), j in (i + 1):n
-        if labels[i] == labels[j]
-            quality += residual(i, j) * max(core[i], core[j])
-        end
-    end
-    return quality
-end
-
-function _joint_move_delta(node, new_pair, new_core, labels, core, residual)
-    delta = 0.0
-    old_pair = labels[node]
-    old_core = core[node]
-    for other in eachindex(labels)
-        other == node && continue
-        old_term = old_pair == labels[other] ? max(old_core, core[other]) : 0.0
-        new_term = new_pair == labels[other] ? max(new_core, core[other]) : 0.0
-        delta += residual(node, other) * (new_term - old_term)
-    end
-    return delta
 end
 
 function _joint_relabel(labels)
@@ -462,4 +453,112 @@ function _joint_median(values)
     ordered = sort(values)
     n = length(ordered)
     isodd(n) ? ordered[(n + 1) ÷ 2] : (ordered[n ÷ 2] + ordered[n ÷ 2 + 1]) / 2
+end
+
+"""
+    multiple_cp_pairs(A; null_model=:er, max_pairs=10, min_pair_size=2,
+                      max_iter=100, n_runs=10, pair_selection=:penalized,
+                      pair_penalty=0.5, rng=Random.default_rng())
+
+Detect multiple core-periphery pairs (Kojaku & Masuda 2017, 2018) by jointly
+switching each node's pair and binary core/periphery role.
+
+# Keyword arguments
+- `null_model`: `:er` (default) uses the Erdős–Rényi null of Kojaku & Masuda
+  (2017) eq. (3), `p = m / binom(n, 2)`; `:configuration` uses the
+  degree-preserving null of Kojaku & Masuda (2018) eq. (13),
+  `P[i,j] = d[i] d[j] / (2m)`, implemented exactly (including the paper's
+  `i = j` null term). **Kojaku & Masuda (2018) recommend the configuration
+  null**: under the ER null any network with a heterogeneous degree
+  distribution exhibits core-periphery pairs, because high-degree nodes are
+  "core" relative to a uniform density even when the structure is fully
+  explained by the degrees; the configuration null only rewards
+  core-periphery structure beyond what the degree sequence implies. `:er`
+  remains the default for continuity with 0.1 and with the 2017 paper, so pass
+  `null_model=:configuration` (or use [`multiple_cp_pairs_config`](@ref)) for
+  substantive analyses.
+- `max_pairs`: Largest number of pairs considered; any value from `1` to `n`
+  is accepted (the effective cap is `n ÷ min_pair_size`).
+- `min_pair_size`: Smallest pair allowed.
+- `max_iter`, `n_runs`: Sweeps per run and number of random restarts; restarts
+  cycle through `1:max_pairs` initial pair counts.
+- `pair_selection`: Rule choosing the number of pairs among the best `k`-pair
+  solutions found. `:penalized` (default) maximises the objective minus
+  `pair_penalty * (k - 1) * log(n) / n`; `:objective` maximises the raw
+  objective, which is nondecreasing in `k` in practice and therefore tends to
+  over-partition (and to vary with the seed) on a single planted pair.
+- `pair_penalty`: Penalty strength for `:penalized`.
+- `rng`: Random-number generator.
+
+Isolates (nodes with zero strength) are removed before fitting and reported
+with pair label `0` and coreness `0`; `n_pairs` counts the pairs of the
+non-isolated nodes, whose labels are `1:n_pairs`. The null densities are those
+of the non-isolated subnetwork. A warning is emitted (once per session) when
+`A` has more than one connected component with at least two nodes.
+"""
+function multiple_cp_pairs(
+    A::AbstractMatrix{<:Real};
+    null_model::Symbol=:er,
+    max_pairs::Int=10,
+    min_pair_size::Int=2,
+    max_iter::Int=100,
+    n_runs::Int=10,
+    pair_selection::Symbol=:penalized,
+    pair_penalty::Real=0.5,
+    rng::AbstractRNG=Random.default_rng(),
+)
+    A = _unwrap_adjacency(A)
+    n = _validate_adjacency(A; symmetric=true)
+    _warn_disconnected(A, :multiple_cp_pairs)
+    isolates = _isolates(A)
+    keep = setdiff(1:n, isolates)
+    if isempty(keep)
+        # Nothing to fit: every node is an isolate.
+        return CPMultiResult(
+            zeros(Int, n), zeros(Float64, n), 0, 0.0, "Multiple CP Pairs",
+            pair_selection, Int[], Float64[], Float64[],
+        )
+    end
+    sub = length(keep) == n ? A : A[keep, keep]
+    result = _multiple_cp_pairs_joint(
+        sub;
+        null_model=null_model,
+        max_pairs=max_pairs,
+        min_pair_size=min_pair_size,
+        max_iter=max_iter,
+        n_runs=n_runs,
+        pair_selection=pair_selection,
+        pair_penalty=pair_penalty,
+        rng=rng,
+    )
+    pair_labels = zeros(Int, n)
+    pair_labels[keep] = result.pair_labels
+    coreness = zeros(Float64, n)
+    coreness[keep] = result.coreness
+    return CPMultiResult(
+        pair_labels,
+        coreness,
+        result.n_pairs,
+        result.quality,
+        "Multiple CP Pairs",
+        result.pair_selection,
+        result.candidate_pair_counts,
+        result.candidate_qualities,
+        result.selection_scores,
+    )
+end
+
+"""
+    multiple_cp_pairs_config(A; kwargs...)
+
+Convenience wrapper for `multiple_cp_pairs(A; null_model=:configuration)`, the
+degree-preserving null that Kojaku & Masuda (2018) recommend. All other
+keywords are forwarded to [`multiple_cp_pairs`](@ref); passing `null_model`
+raises an `ArgumentError` because the wrapper fixes it.
+"""
+function multiple_cp_pairs_config(A::AbstractMatrix{<:Real}; kwargs...)
+    haskey(kwargs, :null_model) && throw(ArgumentError(
+        "multiple_cp_pairs_config fixes null_model=:configuration; " *
+        "call multiple_cp_pairs to choose another null"))
+    return multiple_cp_pairs(A; kwargs..., null_model=:configuration)
 end

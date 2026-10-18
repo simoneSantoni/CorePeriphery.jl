@@ -9,7 +9,7 @@ makedocs(;
     sitename="CorePeriphery.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://simoneSantoni.github.io/CorePeriphery.jl",
+        canonical="https://simoneSantoni.github.io/CorePeriphery.jl/stable/",
         assets=String[],
     ),
     pages=[
